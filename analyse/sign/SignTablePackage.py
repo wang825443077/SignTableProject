@@ -7,9 +7,9 @@ import pandas as pd
 import demjson
 import redis
 import time
-
-import 网签处理.utils.wang_tool as wang_tool
-from 网签处理.utils.提取城市 import GetCityProvince
+import numpy as np
+import SignTableProject.utils.wang_tool as wang_tool
+from SignTableProject.utils.提取城市 import GetCityProvince
 
 import pymysql
 
@@ -85,7 +85,6 @@ class analyseTable:
 
         if self.five_table in self.conn_1_tables:
             self.five_table_exists = True
-
 
     def getTableColumns(self, tableName, con):
         sql = """show full columns FROM `{}`""".format(tableName)
@@ -427,213 +426,74 @@ class analyseTable:
             print('sta表无更新数据')
 
     # 开始生成第四第五张表
-    def read_three_mess(self):
+    def create_four(self):
         """
-        读取状态表
+        输出每天的状态变化
+        :return:
         """
         try:
             self.conn_1.ping(reconnect=True)
         except:
             print('self.conn_1连接失败')
+        new_list = []
 
-        self.dict_mess = {}
-        sql = """select * from `{}`""".format(self.dataTable1)
-        # sql = """select * from `{}` where id in (1, 3360470, 5704678)""".format(self.three_table)
-        city_df = pd.read_sql(sql, con=self.conn_1)
-        city_df.groupby(['spider_time']).apply(self.create_dict_mess, self.dict_mess)
-
-    def create_dict_mess(self, x, result_dic):
-        dic = {wang_tool.date_number(x.values[0][5]): x.values.tolist()}
-        result_dic.update(dic)
-
-    def create_four(self):
-        """
-        生成第三张表
-        """
-        self.read_three_mess()
-        keys = list(self.dict_mess.keys())
-        keys.sort()
-        index_ = 0
-        while index_ + 1 < len(keys):
-            datas = self.dict_mess[keys[index_]] + self.dict_mess[keys[index_ + 1]]
-            result_dict = {}
-            for data in datas:
-                projID, buildID, status, spider_time = data[1], data[2], data[3], str(data[5])
-                key = ','.join(map(lambda x: str(x), [projID, buildID]))
-                if key not in result_dict:
-                    result_dict[key] = [spider_time, status, None]
+        def process_func_four(x):
+            """
+            处理生成第四张表函数
+            :return:
+            """
+            if len(x) == 1:
+                return
+            x['spider_time'] = pd.to_datetime(x['spider_time'])
+            x.drop_duplicates(subset=['spider_time'], keep='first', inplace=True)
+            x.sort_values('spider_time', inplace=True)
+            x = x.reset_index(drop=True)  # 重置索引
+            x['new_status'] = x['status'].shift(1)
+            x['result_status'] = np.nan
+            for i in range(1, len(x)):
+                new_status = x.loc[i, 'status']
+                old_status = x.loc[i, 'new_status']
+                if self.data['status_top_all'][old_status] > self.data['status_top_all'][new_status]:
+                    x.loc[i, 'result_status'] = '退房'
+                elif self.data['status_top_all'][old_status] < self.data['status_top_all'][new_status]:
+                    x.loc[i, 'result_status'] = '成交'
                 else:
-                    last_spider_time, last_status = result_dict[key][0], result_dict[key][1]
-                    if wang_tool.date_number(last_spider_time) < wang_tool.date_number(spider_time):
-                        if self.data['status_top_all'][str(last_status)] > self.data['status_top_all'][str(status)]:
-                            result_dict[key][2] = '退房'
-                        elif self.data['status_top_all'][str(last_status)] < self.data['status_top_all'][str(status)]:
-                            result_dict[key][2] = '成交'
-                        else:
-                            pass
-                        # 更新成最新的状态
-                        result_dict[key][0], result_dict[key][1] = [spider_time, status]
+                    # 未有变化
+                    pass
+            new_df = x[x['result_status'].isna() == False][['projID', 'buildID', 'result_status', 'spider_time']]
+            new_list.append(new_df)
 
-                    elif wang_tool.date_number(last_spider_time) > wang_tool.date_number(spider_time):
-                        if self.data['status_top_all'][str(last_status)] > self.data['status_top_all'][str(status)]:
-                            result_dict[key][2] = '成交'
-                        elif self.data['status_top_all'][str(last_status)] < self.data['status_top_all'][str(status)]:
-                            result_dict[key][2] = '退房'
-                        else:
-                            pass
+        sql = """select * from `{}`""".format(self.dataTable1)
+        four_df = pd.read_sql(sql, con=self.conn_1)
+        # print(len(four_df.groupby(['projID', 'buildID']).groups))
+        # new_four_df = four_df.groupby(['projID', 'buildID'], as_index=False, group_keys=True).apply(process_func_four)
+        group_four_df = four_df.groupby(['projID', 'buildID'], as_index=False, group_keys=True)
+        for group_index, group_value in group_four_df:
+            process_func_four(group_value)
 
-                    else:
-                        if self.data['status_top_all'][str(last_status)] > self.data['status_top_all'][str(status)]:
-                            result_dict[key][2] = '成交'
-                        elif self.data['status_top_all'][str(last_status)] < self.data['status_top_all'][str(status)]:
-                            result_dict[key][2] = '退房'
-                        else:
-                            pass
+        if len(new_list) > 0:
+            new_four_df = pd.concat(new_list)
+            csv_path = os.path.join(self.result_folder_path, '%s_%s.csv' % (self.four_table, self.today))
+            new_four_df.to_csv(csv_path, index=False, encoding='utf-8-sig')
 
-            try:
-                self.conn_1.ping(reconnect=True)
-            except:
-                print('self.conn_1连接失败')
-
-            for key, value_list in result_dict.items():
-                projID, buildID = key.split(',')
-                spider_time, status, result_status = value_list
-                if result_status:
-                    param = [int(projID), int(buildID), result_status, wang_tool.get_date_y_m_d(spider_time)]
-                    temp_str = ','.join(map(lambda x: '%s', param))
-                    sql = """insert into {}(projID, buildID, change_status, spider_time) values({})""".format(self.four_table, temp_str)
-                    self.cur1.execute(sql, param)
-                    self.conn_1.commit()
-            index_ += 1
-        print('生成第四张表完成')
+            self.loadCsvData(csv_path, ['projID', 'buildID', 'change_status', 'spider_time'], self.four_table)
+        print('第四张表插入成功')
 
     def create_five(self):
         """
-        生成第五张表
+        第五张表
         :return:
         """
-        sql = """select id, {} from `{}`""".format(self.data['area'], self.dataTable)
-        self.cur1.execute(sql)
-        dic = {data[0]: data[1] for data in self.cur1.fetchall()}
-
-        re_dic = {}
-        sql = """select * from `{}` where change_status = '成交'""".format(self.four_table)
-        self.cur1.execute(sql)
-        datas = self.cur1.fetchall()
-        for data in datas:
-            build = data[2]
-            spider_time = wang_tool.get_date_y_m_d(str(data[4]))
-            bu_area = dic[build]
-            if spider_time not in re_dic:
-                re_dic[spider_time] = [0, 0, 0]
-            re_dic[spider_time][0] += 1
-            try:
-                re_dic[spider_time][1] += float(bu_area)
-            except:
-                pass
-        for spi_time, value in re_dic.items():
-            sale_num, sale_Area, sale_money = value
-            param = [self.city, sale_num, sale_Area, sale_money, spi_time]
-            temp_str = ','.join(map(lambda x: '%s', param))
-            sql = """insert into {}(city, sale_num, sale_area, sale_money, spider_time) values({})""".format(self.five_table ,temp_str)
-            self.cur1.execute(sql, param)
-            self.conn_1.commit()
-
-        print('生成第五张表完成')
-
-    def update_four(self, last_time, now_time):
-        """
-        更新第四张表
-        :param last_time: 上一天时间
-        :param now_time: 当前时间
-        :return:
-        """
-        result_dict = {}
-        sql = """select * from `{}` where spider_time in ('{}', '{}')""".format(self.dataTable1, last_time, now_time)
-        self.cur1.execute(sql)
-        datas = self.conn_1.commit()
-        for data in datas:
-            projID, buildID, status, spider_time = data[1], data[2], data[3], str(data[5])
-            key = ','.join(map(lambda x: str(x), [projID, buildID]))
-            if key not in result_dict:
-                result_dict[key] = [spider_time, status, None]
-            else:
-                last_spider_time, last_status = result_dict[key][0], result_dict[key][1]
-                if wang_tool.date_number(last_spider_time) < wang_tool.date_number(spider_time):
-                    if self.data['status_top'][str(last_status)] > self.data['status_top'][str(status)]:
-                        result_dict[key][2] = '退房'
-                    elif self.data['status_top'][str(last_status)] < self.data['status_top'][str(status)]:
-                        result_dict[key][2] = '成交'
-                    else:
-                        pass
-                    # 更新成最新的状态
-                    result_dict[key][0], result_dict[key][1] = [spider_time, status]
-
-                elif wang_tool.date_number(last_spider_time) > wang_tool.date_number(spider_time):
-                    if self.data['status_top'][str(last_status)] > self.data['status_top'][str(status)]:
-                        result_dict[key][2] = '成交'
-                    elif self.data['status_top'][str(last_status)] < self.data['status_top'][str(status)]:
-                        result_dict[key][2] = '退房'
-                    else:
-                        pass
-
-                else:
-                    if self.data['status_top'][str(last_status)] > self.data['status_top'][str(status)]:
-                        result_dict[key][2] = '成交'
-                    elif self.data['status_top'][str(last_status)] < self.data['status_top'][str(status)]:
-                        result_dict[key][2] = '退房'
-                    else:
-                        pass
-
-        for key, value_list in result_dict.items():
-            projID, buildID = key.split(',')
-            spider_time, status, result_status = value_list
-            if result_status:
-                param = [int(projID), int(buildID), result_status, wang_tool.get_date_y_m_d(spider_time)]
-                temp_str = ','.join(map(lambda x: '%s', param))
-                sql = """insert into {}(projID, buildID, change_status, spider_time) values({})""".format(
-                    self.four_table, temp_str)
-                self.cur1.execute(sql, param)
-                self.conn_1.commit()
-
-        # 更新第五张表
-        sql = """select id, {} from `{}`""".format(self.data['area'], self.dataTable)
-        self.cur1.execute(sql)
-        dic = {data[0]: data[1] for data in self.cur1.fetchall()}
-
-        re_dic = {}
-        sql = """select * from `{}` where change_status = '成交' and spider_time = '{}'""".format(self.four_table, now_time)
-        print(sql)
-        self.cur1.execute(sql)
-        datas = self.cur1.fetchall()
-        for data in datas:
-            build = data[2]
-            spider_time = wang_tool.get_date_y_m_d(str(data[4]))
-            bu_area = dic[build]
-            if spider_time not in re_dic:
-                re_dic[spider_time] = [0, 0, 0]
-            re_dic[spider_time][0] += 1
-            try:
-                re_dic[spider_time][1] += float(bu_area)
-            except:
-                pass
-        for spi_time, value in re_dic.items():
-            sale_num, sale_Area, sale_money = value
-            param = [self.city, sale_num, sale_Area, sale_money, spi_time]
-            temp_str = ','.join(map(lambda x: '%s', param))
-            sql = """insert into {}(city, sale_num, sale_area, sale_money, spider_time) values({})""".format(
-                self.five_table, temp_str)
-            self.cur1.execute(sql, param)
-            self.conn_1.commit()
+        pass
 
     def anlyse(self):
-        self.creat_table()
-        self.alter_table()
-        self.readOrigTable()
-        self.cleanOrigTable()
-        self.insertProj()
-        self.insetDataTable()
-        self.insetDataTable_one()
+        # self.creat_table()
+        # self.alter_table()
+        # self.readOrigTable()
+        # self.cleanOrigTable()
+        # self.insertProj()
+        # self.insetDataTable()
+        # self.insetDataTable_one()
         self.create_four()  # 生成第四张表
         self.create_five()  # 生成第五张表
 

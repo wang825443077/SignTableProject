@@ -2,8 +2,8 @@
 
 import unittest
 
-from 网签处理.analyse.sign.SignTablePackage import analyseTable
-from 网签处理.data.StatusDict import *
+from SignTableProject.analyse.sign.SignTablePackage import analyseTable
+from SignTableProject.data.StatusDict import *
 
 
 class beijingTestCase(unittest.TestCase):

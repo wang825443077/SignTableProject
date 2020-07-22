@@ -26,7 +26,7 @@ columns_dict = {
 
 beijing = {
     # 数据库连接
-    'origDB': mysql_address['34'],   # 网签原始数据库
+    'origDB': mysql_address['47'],   # 网签原始数据库
     'localDB': mysql_address['80'],  # 保存处理结果数据库
     # 原始表名
     'origTable_pro': 'beijing0101_pro',
@@ -51,6 +51,8 @@ beijing = {
     'staStatusField': 'sales_status2',  # sta表标识状态的列名
     'status_top_all': {'已预定': 5, '资格核验中': 5, '已预订': 5, '可售': 1, '网上联机备案': 1, '不可售': 1},  # 城市的销售状态等级
     'area': 'scale',    # 面积对应字段
+    'orgiIP': '192.168.1.80',
+    'orgipassword': 'root',
 }
 
 
