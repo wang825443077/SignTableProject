@@ -1,10 +1,9 @@
 # coding:utf-8
 import unittest
-import 网签处理框架.HTMLTestReportCN as HTMLTestReport
+import 网签处理.HTMLTestReportCN as HTMLTestReport
 import os
-import time
 
-from 网签处理框架.case.test_beijing import beijingTestCase
+from 网签处理.case.sign.test_beijing import beijingTestCase
 
 # 用例路径
 case_path = os.path.join(os.getcwd(), "case")
