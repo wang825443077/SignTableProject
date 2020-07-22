@@ -8,8 +8,8 @@ import demjson
 import redis
 import time
 
-import my_package.update_base_data.wang_tool as wang_tool
-from 获取城市信息.提取城市 import GetCityProvince
+import SignTableProject.utils.wang_tool as wang_tool
+from SignTableProject.utils.提取城市 import GetCityProvince
 
 import pymysql
 
