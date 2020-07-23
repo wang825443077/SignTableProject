@@ -11,8 +11,8 @@ import demjson
 import redis
 import time
 import numpy as np
-import SignTableProject.utils.wang_tool as wang_tool
-from SignTableProject.utils.提取城市 import GetCityProvince
+import utils.wang_tool as wang_tool
+from utils.提取城市 import GetCityProvince
 
 import pymysql
 conn_redis = redis.StrictRedis(host='127.0.0.1', port=6379, decode_responses=True, db=0)
@@ -595,20 +595,20 @@ class analyseTable:
         pass
 
     def anlyse(self):
-        # self.creat_table()
-        # self.alter_table()
-        # self.readOrigTable()
-        # self.cleanOrigTable()
-        # self.insertProj()
-        # self.insetDataTable()
-        # self.insetDataTable_one()
+        self.creat_table()
+        self.alter_table()
+        self.readOrigTable()
+        self.cleanOrigTable()
+        self.insertProj()
+        self.insetDataTable()
+        self.insetDataTable_one()
         self.create_four()  # 生成第四张表
-        # self.create_five()  # 生成第五张表
+        self.create_five()  # 生成第五张表
 
 
 if __name__ == '__main__':
     start = time.time()
-    from SignTableProject.data.StatusDict import *
+    from data.StatusDict import *
     t1 = analyseTable(guangzhou)
     t1.anlyse()
     print(time.time() - start)
