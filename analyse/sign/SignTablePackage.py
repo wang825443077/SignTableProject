@@ -1,3 +1,5 @@
+# !/usr/bin/env Python
+# coding=utf_8
 import datetime
 import json
 import os
@@ -16,10 +18,10 @@ import pymysql
 
 class analyseTable:
     def __init__(self, data):
-        self.conn_1 = pymysql.Connection(**data['origDB'])
+        self.conn_1 = pymysql.Connection(**data['localDB'])
         self.cur1 = self.conn_1.cursor()
 
-        self.conn_2 = pymysql.Connection(**data['localDB'])
+        self.conn_2 = pymysql.Connection(**data['origDB'])
         self.cur2 = self.conn_2.cursor()
 
         self.city_obj = GetCityProvince()
@@ -44,6 +46,8 @@ class analyseTable:
         self.proj_spider_time_field = data['proj_spider_time_field']
         self.room_spider_time_field = data['room_spider_time_field']
         self.sta_spider_time_field = data['sta_spider_time_field']
+        self.proj_merge_columns = data['proj_merge_columns']
+        self.room_merge_columns = data['room_merge_columns']
 
         self.orig_proj_columns = self.getTableColumns(self.origTable_pro, self.conn_2)
         if 'id' in self.orig_proj_columns:
@@ -95,10 +99,10 @@ class analyseTable:
     def creat_table(self):
         sql_table1 = """CREATE TABLE IF NOT EXISTS {Table} (
                     id INT(11) UNSIGNED AUTO_INCREMENT, 
-                    proname VARCHAR(255) DEFAULT NULL,
-                    company VARCHAR(100) DEFAULT NULL,
+                    proname VARCHAR(150) DEFAULT NULL,
+                    company VARCHAR(50) DEFAULT NULL,
                     position VARCHAR(255) DEFAULT NULL,
-                    ca_num VARCHAR(255) DEFAULT NULL,
+                    ca_num VARCHAR(100) DEFAULT NULL,
                     region VARCHAR(20) DEFAULT NULL,
                     city VARCHAR(20) DEFAULT NULL,
                     province VARCHAR(20) DEFAULT NULL,
@@ -207,8 +211,8 @@ class analyseTable:
         df_table_date = pd.read_sql(sql_table_date.format(spider_time=spider_time, Table=tableName), con=self.conn_1)
         df_orig_table_date = pd.read_sql(sql_table_date.format(spider_time=orig_spider_time, Table=origTableName), con=self.conn_2)
 
-        table_date = set(df_table_date.iloc[:, 0].tolist())
-        orig_table_date = set(df_orig_table_date.iloc[:, 0].tolist())
+        table_date = {te for te in df_table_date.iloc[:, 0].tolist() if str(te) != 'None'}
+        orig_table_date = {te for te in df_orig_table_date.iloc[:, 0].tolist() if str(te) != 'None'}
         add_date = list(orig_table_date - table_date)
         return add_date
 
@@ -255,7 +259,7 @@ class analyseTable:
                 sql_room = ''
 
         if self.data_table1_exists:
-            sta_add_date = self.getAddDate(self.dataTable1, self.origTable_sta, 'spider_time', self.sta_spider_time_field)
+            sta_add_date = self.getAddDate(self.dataTable1, self.origTable_sta, self.data['table1_spider_time_field'], self.sta_spider_time_field)
             if sta_add_date:
                 if len(sta_add_date) == 1:
                     dateList = "('{}')".format(sta_add_date[0])
@@ -286,6 +290,8 @@ class analyseTable:
             self.df_sta.fillna('', inplace=True)
         else:
             self.df_sta = ''
+            
+        print('原始表读取完成')
 
     def cleanOrigTable(self):
         pass
@@ -317,6 +323,7 @@ class analyseTable:
         print('proj表数据处理完成')
 
     def loadCsvData(self, csv_path, columns, table):
+        
         sql = """LOAD DATA INFILE '{csvPath}'
                  IGNORE INTO TABLE {table}
                  FIELDS TERMINATED BY ','
@@ -325,6 +332,12 @@ class analyseTable:
                  ignore 1 lines
                  ({columns});""".format(csvPath=csv_path.replace('\\','/'),columns=','.join(columns),
                                         table=table)
+        # print(sql)
+        try:
+            self.conn_1.ping(reconnect=True)
+        except:
+            print('self.conn_1连接失败')
+
         try:
             self.cur1.execute(sql)
             self.conn_1.commit()
@@ -355,7 +368,7 @@ class analyseTable:
             self.df_proj_data = self.origDataReplace(self.df_proj_data)
 
             csv_path = os.path.join(self.result_folder_path, '%s_%s.csv' % (self.origTable_pro, self.today))
-            self.df_proj_data.to_csv(csv_path, index=False, encoding='utf-8-sig')
+            self.df_proj_data.to_csv(csv_path, index=False, encoding='utf_8')
 
             self.loadCsvData(csv_path, sort_columns, self.projTableName)
             print('proj表插入成功')
@@ -378,14 +391,16 @@ class analyseTable:
             room_columns = self.df_room.columns.tolist()
 
             self.df_proj = pd.read_sql(sql_proj, con=self.conn_1)
-            self.df_proj.rename(columns={'id':'projID'},inplace=True)
-            self.df_room = self.df_room.merge(self.df_proj[['projID', 'proname','ca_num']], on=['proname','ca_num'], how='left')
+            self.df_proj.rename(columns={'id': 'projID'}, inplace=True)
+            self.df_room = self.df_room.merge(self.df_proj[['projID'] + self.proj_merge_columns],
+                                              left_on=self.room_merge_columns, right_on=self.proj_merge_columns,
+                                              how='left')
 
             room_columns_new = ['projID'] + room_columns
             self.df_room = self.df_room[room_columns_new]
 
             csv_path = os.path.join(self.result_folder_path, '%s_%s.csv' % (self.origTable_room, self.today))
-            self.df_room.to_csv(csv_path, index=False, encoding='utf-8-sig')
+            self.df_room.to_csv(csv_path, index=False, encoding='utf-8')
 
             self.loadCsvData(csv_path, sort_columns, self.dataTable)
             print('room表插入成功')
@@ -409,15 +424,16 @@ class analyseTable:
 
             self.df_sta = self.df_sta.merge(self.df_data_table, on=[self.roomUniqueField], how='left')
             self.df_sta_err = self.df_sta[self.df_sta['buildID'].isnull()]
-            df_sta_err_csv_path = os.path.join(self.result_folder_path, '%s_%s_%s.csv' % (self.origTable_sta, '匹配不到id', self.today))
-            self.df_sta_err.to_csv(df_sta_err_csv_path, index=False, encoding='utf-8-sig')
+            df_sta_err_csv_path = os.path.join(self.result_folder_path,
+                                               '%s_%s_%s.csv' % (self.origTable_sta, '匹配不到id', self.today))
+            self.df_sta_err.to_csv(df_sta_err_csv_path, index=False, encoding='utf-8')
 
             self.df_sta = self.df_sta[self.df_sta['buildID'].notnull()]
-            sort_columns = ['projID', 'buildID', self.staStatusField, 'spider_time']
+            sort_columns = ['projID', 'buildID', self.staStatusField, self.sta_spider_time_field]
             self.df_sta = self.df_sta[sort_columns]
 
             csv_path = os.path.join(self.result_folder_path, '%s_%s.csv' % (self.origTable_sta, self.today))
-            self.df_sta.to_csv(csv_path, index=False, encoding='utf-8-sig')
+            self.df_sta.to_csv(csv_path, index=False, encoding='utf-8')
 
             db_columns = ['projID', 'buildID', 'status', 'spider_time']
             self.loadCsvData(csv_path, db_columns, self.dataTable1)
@@ -435,6 +451,7 @@ class analyseTable:
             self.conn_1.ping(reconnect=True)
         except:
             print('self.conn_1连接失败')
+
         new_list = []
 
         def process_func_four(x):
@@ -474,7 +491,7 @@ class analyseTable:
         if len(new_list) > 0:
             new_four_df = pd.concat(new_list)
             csv_path = os.path.join(self.result_folder_path, '%s_%s.csv' % (self.four_table, self.today))
-            new_four_df.to_csv(csv_path, index=False, encoding='utf-8-sig')
+            new_four_df.to_csv(csv_path, index=False, encoding='utf_8')
 
             self.loadCsvData(csv_path, ['projID', 'buildID', 'change_status', 'spider_time'], self.four_table)
         print('第四张表插入成功')
@@ -487,18 +504,18 @@ class analyseTable:
         pass
 
     def anlyse(self):
-        # self.creat_table()
-        # self.alter_table()
-        # self.readOrigTable()
-        # self.cleanOrigTable()
-        # self.insertProj()
-        # self.insetDataTable()
-        # self.insetDataTable_one()
-        self.create_four()  # 生成第四张表
-        self.create_five()  # 生成第五张表
+        self.creat_table()
+        self.alter_table()
+        self.readOrigTable()
+        self.cleanOrigTable()
+        self.insertProj()
+        self.insetDataTable()
+        self.insetDataTable_one()
+        # self.create_four()  # 生成第四张表
+        # self.create_five()  # 生成第五张表
 
 
-# if __name__ == '__main__':
-#     from 网签处理框架.data.StatusDict import *
-#     test = analyseThreeTable(beijing)
-#     test.anlyse()
+if __name__ == '__main__':
+    from SignTableProject.data.StatusDict import *
+    t1 = analyseTable(guangzhou)
+    t1.anlyse()
