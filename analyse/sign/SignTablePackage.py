@@ -87,6 +87,10 @@ class analyseTable:
 
         self.now_time = str(datetime.datetime.now().strftime('%Y-%m-%d'))
 
+        self.projOrigFieldData = {}
+        self.roomOrigFieldData = {}
+
+
     def getTableColumns(self, tableName, con):
         sql = """show full columns FROM `{}`""".format(tableName)
         df_column = pd.read_sql(sql, con=con)
@@ -217,49 +221,49 @@ class analyseTable:
         except:
             print('self.conn_1连接失败')
 
-        # if self.proj_exists:
-        #     orig_add_date = self.getAddDate(self.projTableName, self.origTable_pro,
-        #                                     self.data['signproj_spider_time_field'], self.proj_spider_time_field)
-        #     if orig_add_date:
-        #         if len(orig_add_date) == 1:
-        #             dateList = "('{}')".format(orig_add_date[0])
-        #         else:
-        #             dateList = str(tuple(orig_add_date))
-        #         sql_proj = """select {columns}
-        #                      from {proTable}
-        #                      where DATE_FORMAT({spider_time},'%Y-%m-%d') in {dateList}
-        #                      """.format(proTable=self.origTable_pro,columns=room_columns,
-        #                                 dateList=dateList, spider_time=self.proj_spider_time_field)
-        #     else:
-        #         sql_proj = ''
-        #
-        # if self.data_table_exists:
-        #     room_add_date = self.getAddDate(self.dataTable, self.origTable_room, self.room_spider_time_field, self.room_spider_time_field)
-        #     if room_add_date:
-        #         if len(room_add_date) == 1:
-        #             dateList = "('{}')".format(room_add_date[0])
-        #         else:
-        #             dateList = str(tuple(room_add_date))
-        #         sql_room = """select *
-        #                       from {table}
-        #                       where DATE_FORMAT({spider_time},'%Y-%m-%d') in {dateList}
-        #                       """.format(table=self.origTable_room, dateList=dateList, spider_time=self.room_spider_time_field)
-        #     else:
-        #         sql_room = ''
-        #
-        # if self.data_table1_exists:
-        #     sta_add_date = self.getAddDate(self.dataTable1, self.origTable_sta, self.data['table1_spider_time_field'], self.sta_spider_time_field)
-        #     if sta_add_date:
-        #         if len(sta_add_date) == 1:
-        #             dateList = "('{}')".format(sta_add_date[0])
-        #         else:
-        #             dateList = str(tuple(sta_add_date))
-        #         sql_sta = """select *
-        #                       from {table}
-        #                       where DATE_FORMAT({spider_time},'%Y-%m-%d') in {dateList}
-        #                       """.format(table=self.origTable_sta, dateList=dateList, spider_time=self.sta_spider_time_field)
-        #     else:
-        #         sql_sta = ''
+        if self.proj_exists:
+            orig_add_date = self.getAddDate(self.projTableName, self.origTable_pro,
+                                            self.data['signproj_spider_time_field'], self.proj_spider_time_field)
+            if orig_add_date:
+                if len(orig_add_date) == 1:
+                    dateList = "('{}')".format(orig_add_date[0])
+                else:
+                    dateList = str(tuple(orig_add_date))
+                sql_proj = """select {columns}
+                             from {proTable}
+                             where DATE_FORMAT({spider_time},'%Y-%m-%d') in {dateList}
+                             """.format(proTable=self.origTable_pro,columns=room_columns,
+                                        dateList=dateList, spider_time=self.proj_spider_time_field)
+            else:
+                sql_proj = ''
+
+        if self.data_table_exists:
+            room_add_date = self.getAddDate(self.dataTable, self.origTable_room, self.room_spider_time_field, self.room_spider_time_field)
+            if room_add_date:
+                if len(room_add_date) == 1:
+                    dateList = "('{}')".format(room_add_date[0])
+                else:
+                    dateList = str(tuple(room_add_date))
+                sql_room = """select *
+                              from {table}
+                              where DATE_FORMAT({spider_time},'%Y-%m-%d') in {dateList}
+                              """.format(table=self.origTable_room, dateList=dateList, spider_time=self.room_spider_time_field)
+            else:
+                sql_room = ''
+
+        if self.data_table1_exists:
+            sta_add_date = self.getAddDate(self.dataTable1, self.origTable_sta, self.data['table1_spider_time_field'], self.sta_spider_time_field)
+            if sta_add_date:
+                if len(sta_add_date) == 1:
+                    dateList = "('{}')".format(sta_add_date[0])
+                else:
+                    dateList = str(tuple(sta_add_date))
+                sql_sta = """select *
+                              from {table}
+                              where DATE_FORMAT({spider_time},'%Y-%m-%d') in {dateList}
+                              """.format(table=self.origTable_sta, dateList=dateList, spider_time=self.sta_spider_time_field)
+            else:
+                sql_sta = ''
         if sql_proj:
             self.df_proj_data = pd.read_sql(sql_proj, con=self.conn_2)
             self.df_proj_data.fillna('', inplace=True)
@@ -282,7 +286,6 @@ class analyseTable:
         print('df_sta', len(self.df_sta))
 
         self.rewrite_read()
-
         print('原始表读取完成')
 
     def rewrite_read(self):
@@ -292,24 +295,20 @@ class analyseTable:
         """
         pass
 
-    def save_text(self, file_path, contents):
+    def save_text(self, contents):
         """
         保存错误文本
         :param file_path: 文件地址
         :param contents: 保存内容
         :return:
         """
-        if not os.path.exists(file_path):
-            fp = open(file_path, 'w')  # 创建一个文本
-        else:
-            with open(file_path, 'a+') as f:
-                for content in contents:
-                    f.write('\t'.join(content) + '\n')
+        for content in contents:
+            self.f.write('\t'.join(content) + '\n')
 
     def cleanOrigTable(self):
         """清洗列表"""
         error_txt_path = os.path.join(self.result_folder_path, '%s_%s.txt' % ('errorTXT', self.today))
-
+        self.f = open(error_txt_path, 'w')  # 创建一个文本
         def extral_number(x, columns_name, table_name):
             res_list = re.findall(r'[.\d]+', x)
             if len(res_list) > 1 or len(res_list) == 0:
@@ -337,10 +336,6 @@ class analyseTable:
                 if len(error_list):
                     self.save_text(error_txt_path, error_list)
 
-    def countOrigTable(self):
-        """
-        :return:
-        """
 
     def loadCsvData(self, csv_path, columns, table):
 
@@ -511,7 +506,7 @@ class analyseTable:
             dict_mess = {}
             dateList = self.getFourDate(self.four_table, self.dataTable1, self.data['FourTable_spider_time_field'],
                                         self.data['table1_spider_time_field'])
-            print(dateList)
+            # print(dateList)
             if dateList:
                 sql = """select * from `{three_table}` where DATE_FORMAT({spider_time},'%Y-%m-%d') in {dateList}
                                """.format(three_table=self.dataTable1, spider_time=self.data['table1_spider_time_field'],
@@ -523,7 +518,7 @@ class analyseTable:
         dict_mess = read_three_mess()
         keys = list(dict_mess.keys())
         keys.sort()
-        print(keys)
+        # print(keys)
         index_ = 0
         while index_ + 1 < len(keys):
             datas = dict_mess[keys[index_]] + dict_mess[keys[index_ + 1]]
@@ -560,7 +555,7 @@ class analyseTable:
                             result_dict[key][2] = '退房'
                         else:
                             pass
-            print(','*50, result_dict)
+            # print(','*50, result_dict)
             for key, value_list in result_dict.items():
                 projID, buildID = key.split(',')
                 spider_time, status, result_status = value_list
@@ -580,16 +575,107 @@ class analyseTable:
         """
         pass
 
+    def countOrigTable(self):
+        # room_columns = ','.join(self.orig_proj_columns)
+        # sql_proj = """select {columns}
+        #          from {proTable}
+        #          """.format(proTable=self.origTable_pro,columns=room_columns)
+        # self.df_proj_data = pd.read_sql(sql_proj, con=self.conn_2)
+        count_txt_path = os.path.join(self.result_folder_path, '%s_%s.txt' % ('countTXT', self.today))
+
+        # 列为空个数
+        if isinstance(self.df_proj_data, pd.DataFrame):
+            orig_proj_columns = self.df_proj_data.columns.tolist()
+            orig_data_len = len(self.df_proj_data)
+            for proj_column in orig_proj_columns:
+                if proj_column not in self.projOrigFieldData:
+                    self.projOrigFieldData[proj_column] = {}
+                self.projOrigFieldData[proj_column]['列值为空占比'] = \
+                                self.df_proj_data[proj_column].isnull().sum() / orig_data_len * 100
+            print(self.projOrigFieldData)
+
+        # 项目数
+        sql_proj_num = """select count(*) as projTotalnum from {table}""".format(table=self.origTable_pro)
+        df_sql_proj_num = pd.read_sql(sql_proj_num, con=self.conn_2)
+
+        # 项目增加/减少数
+        sql_table_date = """select distinct DATE_FORMAT({spider_time},'%Y-%m-%d')  from {Table} 
+                            where DATE_FORMAT({spider_time},'%Y-%m-%d') != '0000-00-00'"""
+        df_orig_table_date = pd.read_sql(sql_table_date.format(spider_time=self.data['table1_spider_time_field'],
+                                                               Table=self.dataTable1), con=self.conn_1)
+        print(df_orig_table_date)
+        df_orig_table_date = [i for i in df_orig_table_date.iloc[:, 0].tolist() if i != 'None']
+        df_orig_table_date = pd.to_datetime(df_orig_table_date)
+        recent_two_day = sorted(df_orig_table_date)[-2:]
+        recent_two_day = list(map(lambda x:x.strftime('%Y-%m-%d'), recent_two_day))
+
+        sql_orig_proj = """select DATE_FORMAT({spider_time},'%Y-%m-%d') as '日期',count(distinct projID) as '项目数',
+                                count(distinct unitID) as '房间数'
+                           from {Table}
+                           where DATE_FORMAT({spider_time},'%Y-%m-%d') in {date_list}
+                           group by DATE_FORMAT({spider_time},'%Y-%m-%d')
+                        """.format(spider_time=self.data['table1_spider_time_field'], Table=self.dataTable1,
+                                   date_list=tuple(recent_two_day))
+        df_recent_two_day = pd.read_sql(sql_orig_proj, con=self.conn_1)
+        print(df_recent_two_day)
+
+        # 房间数
+        sql_orig_room = """select DATE_FORMAT({spider_time},'%Y-%m-%d') as date,deal_status as '房间状态变化',
+                                count(deal_status) as '状态变化数量'
+                           from {Table}
+                           group by DATE_FORMAT({spider_time},'%Y-%m-%d'), deal_status
+                        """.format(spider_time=self.data['FourTable_spider_time_field'], Table=self.four_table)
+        df_sql_orig_room = pd.read_sql(sql_orig_room, con=self.conn_1)
+        print(df_sql_orig_room)
+
+        with open(count_txt_path, 'w') as f:
+            f.write('项目表列空占比\n')
+            for key, value in self.projOrigFieldData.items():
+                s = '%s: %.3f%%\n' % (key, value['列值为空占比'])
+                f.write(s)
+
+            f.write('\n项目数\n')
+            for i in df_recent_two_day[['日期', '项目数']].values.tolist():
+                s = '日期:%s,  项目数:%s\n' % (i[0], i[1])
+                f.write(s)
+
+            proj_num_before = df_recent_two_day.loc[df_recent_two_day['日期']==recent_two_day[0], '项目数'].values[0]
+            proj_num_last = df_recent_two_day.loc[df_recent_two_day['日期']==recent_two_day[1], '项目数'].values[0]
+            proj_diff_num = proj_num_last - proj_num_before
+            if proj_diff_num >= 0:
+                f.write('最近两天项目增加数: %d\n' % proj_diff_num)
+            else:
+                f.write('最近两天项目减少数: %d\n' % proj_diff_num)
+
+            f.write('\n房间数\n')
+            for i in df_recent_two_day[['日期', '房间数']].values.tolist():
+                s = '日期:%s,  房间数:%s\n' % (i[0], i[1])
+                f.write(s)
+
+            room_num_before = df_recent_two_day.loc[df_recent_two_day['日期']==recent_two_day[0], '房间数'].values[0]
+            room_num_last = df_recent_two_day.loc[df_recent_two_day['日期']==recent_two_day[1], '房间数'].values[0]
+            room_diff_num = room_num_last - room_num_before
+            if proj_diff_num >= 0:
+                f.write('最近两天房间增加数: %d\n' % room_diff_num)
+            else:
+                f.write('最近两天房间减少数: %d\n' % room_diff_num)
+
+            f.write('\n房间状态变化\n')
+            for i in df_sql_orig_room.values.tolist():
+                s = '日期:%s,  房间状态:%s,  状态变化数量:%s\n' % (i[0], i[1], i[2])
+                f.write(s)
+
     def anlyse(self):
-        # self.creat_table()
-        # self.alter_table()
-        # self.readOrigTable()  # 读取
-        # self.cleanOrigTable()  # 清洗数据
-        # self.insertProj()
-        # self.insetDataTable()
-        # self.insetDataTable_one()
+        self.creat_table()
+        self.alter_table()
+        self.readOrigTable()  # 读取
+        self.cleanOrigTable()  # 清洗数据
+        self.insertProj()
+        self.insetDataTable()
+        self.insetDataTable_one()
         self.create_four()  # 生成第四张表
-        # self.create_five()  # 生成第五张表
+        self.create_five()  # 生成第五张表
+        self.countOrigTable()  # 统计函数
 
 
 if __name__ == '__main__':
