@@ -3,6 +3,7 @@
 import datetime
 import json
 import os
+import re
 import sys
 from multiprocessing import Process, Manager, Queue
 
@@ -15,6 +16,7 @@ import utils.wang_tool as wang_tool
 from utils.提取城市 import GetCityProvince
 
 import pymysql
+import prettytable as pt
 
 
 class analyseTable:
@@ -38,7 +40,6 @@ class analyseTable:
         self.dataTable1 = data['dataTable1']
         self.four_table = data['FourTable']
         self.five_table = data['FiveTable']
-        self.columnIndex = data['columnIndex']
         self.province = data['province']
         self.city = data['city']
         self.projTextColumns = data['projTextColumns']
@@ -55,14 +56,6 @@ class analyseTable:
         if 'id' in self.orig_proj_columns:
             self.orig_proj_columns.remove('id')
         self.orig_room_columns = self.getTableColumns(self.origTable_room, self.conn_2)
-
-        self.orig_proj_columns_modify = [i.replace('-','_') + '_original' for i in self.orig_proj_columns]
-        self.orig_proj_columns_insert = self.orig_proj_columns_modify[::]
-        for i in ['proname', 'company', 'position', 'ca_num', 'spider_time']:
-            if self.columnIndex[i] and self.columnIndex[i] in self.orig_proj_columns_insert:
-                self.orig_proj_columns_insert.remove(self.columnIndex[i])
-
-        self.orig_room_columns_modify = [i.replace('-','_') for i in self.orig_room_columns]
 
         self.today = datetime.datetime.now().strftime('%Y_%m_%d')
         self.result_folder_path = r'D:\resultData\%s_%s' % (self.origTableName, self.today)
@@ -92,6 +85,8 @@ class analyseTable:
         if self.five_table in self.conn_1_tables:
             self.five_table_exists = True
 
+        self.now_time = str(datetime.datetime.now().strftime('%Y-%m-%d'))
+
     def getTableColumns(self, tableName, con):
         sql = """show full columns FROM `{}`""".format(tableName)
         df_column = pd.read_sql(sql, con=con)
@@ -101,57 +96,48 @@ class analyseTable:
     def creat_table(self):
         sql_table1 = """CREATE TABLE IF NOT EXISTS {Table} (
                     id INT(11) UNSIGNED AUTO_INCREMENT, 
-                    proname VARCHAR(150) DEFAULT NULL,
-                    company VARCHAR(50) DEFAULT NULL,
-                    position VARCHAR(255) DEFAULT NULL,
-                    ca_num VARCHAR(255) DEFAULT NULL,
-                    region VARCHAR(20) DEFAULT NULL,
-                    city VARCHAR(20) DEFAULT NULL,
-                    province VARCHAR(20) DEFAULT NULL,
-                    dataTable VARCHAR(255) DEFAULT NULL,
-                    spider_time datetime DEFAULT NULL,
-                    UNIQUE INDEX (proname, company, city, ca_num),
+                    cleantime datetime DEFAULT NULL,
                     PRIMARY KEY (id)            
                     )ENGINE=InnoDB DEFAULT CHARSET=utf8;""".format(Table=self.projTableName)
 
         sql_table2 = """CREATE TABLE IF NOT EXISTS {Table} (
                     id INT(11) UNSIGNED AUTO_INCREMENT, 
                     projID INT(11) DEFAULT NULL,
+                    cleantime datetime DEFAULT NULL,
                     PRIMARY KEY (id)            
                     )ENGINE=InnoDB DEFAULT CHARSET=utf8;""".format(Table=self.dataTable)
 
         sql_table3 = """CREATE TABLE IF NOT EXISTS {Table} (
                     id INT(11) UNSIGNED AUTO_INCREMENT, 
                     projID INT(11) DEFAULT NULL,
-                    buildID INT(11) DEFAULT NULL,
-                    status VARCHAR(10) DEFAULT NULL,
-                    状态变化 VARCHAR(10) DEFAULT NULL,
+                    unitID INT(11) DEFAULT NULL,
+                    sales_status VARCHAR(10) DEFAULT NULL,
                     spider_time datetime DEFAULT NULL,
-                    UNIQUE INDEX (projID, buildID, spider_time),
+                    cleantime datetime DEFAULT NULL,
                     PRIMARY KEY (id)            
                     )ENGINE=InnoDB DEFAULT CHARSET=utf8;""".format(Table=self.dataTable1)
 
         # 创建表四结构
         sql_table4 = """CREATE TABLE IF NOT EXISTS`{}`  (
                   `id` int(11) NOT NULL AUTO_INCREMENT,
-                  `projID` int(11) NULL DEFAULT NULL COMMENT '项目ID',
                   `buildID` int(11) NULL DEFAULT NULL COMMENT 'signdata_xianID',
-                  `change_status` varchar(10) CHARACTER SET utf8 COLLATE utf8_general_ci NULL DEFAULT NULL COMMENT '状态',
+                  `deal_status` varchar(10) CHARACTER SET utf8 COLLATE utf8_general_ci NULL DEFAULT NULL COMMENT '状态',
                   `spider_time` datetime NULL DEFAULT NULL COMMENT '更新时间',
+                  `cleantime` datetime NULL DEFAULT NULL COMMENT '清洗时间',
                   PRIMARY KEY (`id`) USING BTREE
                 ) ENGINE = InnoDB AUTO_INCREMENT = 1298 CHARACTER SET = utf8 COLLATE = utf8_general_ci ROW_FORMAT = Dynamic;""".format(
             self.four_table)
 
         # 创建表五结构
-        sql_table5 = """CREATE TABLE IF NOT EXISTS `{}`  (
-          `id` int(11) NOT NULL AUTO_INCREMENT,
-          `city` varchar(10) CHARACTER SET utf8 COLLATE utf8_general_ci NULL DEFAULT NULL COMMENT '城市',
-          `sale_num` int(11) NULL DEFAULT NULL COMMENT '销售套数',
-          `sale_area` double NULL DEFAULT NULL COMMENT '销售面积',
-          `sale_money` double NULL DEFAULT NULL COMMENT '销售金额',
-          `spider_time` datetime NULL DEFAULT NULL COMMENT '更新时间',
-          PRIMARY KEY (`id`) USING BTREE
-        ) ENGINE = InnoDB AUTO_INCREMENT = 3 CHARACTER SET = utf8 COLLATE = utf8_general_ci ROW_FORMAT = Dynamic;""".format(self.five_table)
+        sql_table5 = """CREATE TABLE `{}`  (
+              `proname` varchar(100) CHARACTER SET utf8 COLLATE utf8_general_ci NULL DEFAULT NULL COMMENT '项目名称',
+              `deal_status` varchar(1) CHARACTER SET utf8 COLLATE utf8_general_ci NULL DEFAULT NULL COMMENT '交易类型',
+              `dealnum` int(11) NULL DEFAULT NULL COMMENT '套数',
+              `dealarea` double NULL DEFAULT NULL COMMENT '面积',
+              `dealamount` double(255, 0) NULL DEFAULT NULL COMMENT '金额',
+              `spidertime` datetime NULL DEFAULT NULL COMMENT '爬取更新时间',
+              `cleantime` datetime NULL DEFAULT NULL COMMENT '清洗时间'
+            ) ENGINE = InnoDB CHARACTER SET = utf8 COLLATE = utf8_general_ci ROW_FORMAT = Dynamic;""".format(self.five_table)
 
         if not self.proj_exists:
             self.cur1.execute(sql_table1)
@@ -179,25 +165,25 @@ class analyseTable:
         """
         # table1排除id
         if not self.proj_exists:
-            for column in self.orig_proj_columns_insert:
+            for column in list(self.data['projcolumns_dict'].values()):
                 if column in self.projTextColumns:
-                    sql = """ALTER TABLE {} ADD COLUMN {} text DEFAULT NULL""".format(self.projTableName, column)
+                    sql = """ALTER TABLE {} ADD COLUMN `{}` text DEFAULT NULL""".format(self.projTableName, column)
                 else:
-                    sql = """ALTER TABLE {} ADD COLUMN {} VARCHAR(255) DEFAULT NULL""".format(self.projTableName, column)
+                    sql = """ALTER TABLE {} ADD COLUMN `{}` VARCHAR(255) DEFAULT NULL""".format(self.projTableName, column)
                 self.cur1.execute(sql)
                 self.conn_1.commit()
 
         # table2
         if not self.data_table_exists:
-            for column in self.orig_room_columns_modify:
+            for column in list(self.data['roomcolumns_dict'].values()):
                 sql = """ALTER TABLE {} ADD COLUMN {} VARCHAR(255) DEFAULT NULL""".format(self.dataTable, column)
                 self.cur1.execute(sql)
                 self.conn_1.commit()
 
-            if self.roomUniqueField:
-                sql_table2_index = """ALTER TABLE {Table} ADD unique(projID,{field});""".format(Table=self.dataTable,
-                                                                                                field=self.roomUniqueField)
-                self.cur1.execute(sql_table2_index)
+            # if self.roomUniqueField:
+            #     sql_table2_index = """ALTER TABLE {Table} ADD unique(projID,{field});""".format(Table=self.dataTable,
+            #                                                                                     field=self.roomUniqueField)
+            #     self.cur1.execute(sql_table2_index)
 
         if all([self.proj_exists, self.data_table_exists]):
             print('无需修改表结构')
@@ -231,99 +217,130 @@ class analyseTable:
         except:
             print('self.conn_1连接失败')
 
-        if self.proj_exists:
-            orig_add_date = self.getAddDate(self.projTableName, self.origTable_pro, 'spider_time', self.proj_spider_time_field)
-            if orig_add_date:
-                if len(orig_add_date) == 1:
-                    dateList = "(('{}'))".format(orig_add_date[0])
-                else:
-                    dateList = str(tuple(orig_add_date))
-                sql_proj = """select {columns}
-                             from {proTable}
-                             where DATE_FORMAT({spider_time},'%Y-%m-%d') in {dateList}
-                             """.format(proTable=self.origTable_pro,columns=room_columns,
-                                        dateList=dateList, spider_time=self.proj_spider_time_field)
-            else:
-                sql_proj = ''
-
-        if self.data_table_exists:
-            room_add_date = self.getAddDate(self.dataTable, self.origTable_room, self.room_spider_time_field, self.room_spider_time_field)
-            if room_add_date:
-                if len(room_add_date) == 1:
-                    dateList = "('{}')".format(room_add_date[0])
-                else:
-                    dateList = str(tuple(room_add_date))
-                sql_room = """select * 
-                              from {table}
-                              where DATE_FORMAT({spider_time},'%Y-%m-%d') in {dateList}
-                              """.format(table=self.origTable_room, dateList=dateList, spider_time=self.room_spider_time_field)
-            else:
-                sql_room = ''
-
-        if self.data_table1_exists:
-            sta_add_date = self.getAddDate(self.dataTable1, self.origTable_sta, self.data['table1_spider_time_field'], self.sta_spider_time_field)
-            if sta_add_date:
-                if len(sta_add_date) == 1:
-                    dateList = "('{}')".format(sta_add_date[0])
-                else:
-                    dateList = str(tuple(sta_add_date))
-                sql_sta = """select * 
-                              from {table}
-                              where DATE_FORMAT({spider_time},'%Y-%m-%d') in {dateList}
-                              """.format(table=self.origTable_sta, dateList=dateList, spider_time=self.sta_spider_time_field)
-            else:
-                sql_sta = ''
-
+        # if self.proj_exists:
+        #     orig_add_date = self.getAddDate(self.projTableName, self.origTable_pro,
+        #                                     self.data['signproj_spider_time_field'], self.proj_spider_time_field)
+        #     if orig_add_date:
+        #         if len(orig_add_date) == 1:
+        #             dateList = "('{}')".format(orig_add_date[0])
+        #         else:
+        #             dateList = str(tuple(orig_add_date))
+        #         sql_proj = """select {columns}
+        #                      from {proTable}
+        #                      where DATE_FORMAT({spider_time},'%Y-%m-%d') in {dateList}
+        #                      """.format(proTable=self.origTable_pro,columns=room_columns,
+        #                                 dateList=dateList, spider_time=self.proj_spider_time_field)
+        #     else:
+        #         sql_proj = ''
+        #
+        # if self.data_table_exists:
+        #     room_add_date = self.getAddDate(self.dataTable, self.origTable_room, self.room_spider_time_field, self.room_spider_time_field)
+        #     if room_add_date:
+        #         if len(room_add_date) == 1:
+        #             dateList = "('{}')".format(room_add_date[0])
+        #         else:
+        #             dateList = str(tuple(room_add_date))
+        #         sql_room = """select *
+        #                       from {table}
+        #                       where DATE_FORMAT({spider_time},'%Y-%m-%d') in {dateList}
+        #                       """.format(table=self.origTable_room, dateList=dateList, spider_time=self.room_spider_time_field)
+        #     else:
+        #         sql_room = ''
+        #
+        # if self.data_table1_exists:
+        #     sta_add_date = self.getAddDate(self.dataTable1, self.origTable_sta, self.data['table1_spider_time_field'], self.sta_spider_time_field)
+        #     if sta_add_date:
+        #         if len(sta_add_date) == 1:
+        #             dateList = "('{}')".format(sta_add_date[0])
+        #         else:
+        #             dateList = str(tuple(sta_add_date))
+        #         sql_sta = """select *
+        #                       from {table}
+        #                       where DATE_FORMAT({spider_time},'%Y-%m-%d') in {dateList}
+        #                       """.format(table=self.origTable_sta, dateList=dateList, spider_time=self.sta_spider_time_field)
+        #     else:
+        #         sql_sta = ''
         if sql_proj:
             self.df_proj_data = pd.read_sql(sql_proj, con=self.conn_2)
             self.df_proj_data.fillna('', inplace=True)
-            self.df_proj_data.columns = self.orig_proj_columns_modify
+            # self.df_proj_data.columns = list(self.data['projcolumns_dict'].values())
         else:
             self.df_proj_data = ''
+        print('df_proj_data', len(self.df_proj_data))
 
         if sql_room:
             self.df_room = pd.read_sql(sql_room, con=self.conn_2)
             self.df_room.fillna('', inplace=True)
         else:
             self.df_room = ''
-
+        print('df_room', len(self.df_room))
         if sql_sta:
             self.df_sta = pd.read_sql(sql_sta, con=self.conn_2)
             self.df_sta.fillna('', inplace=True)
         else:
             self.df_sta = ''
+        print('df_sta', len(self.df_sta))
+
+        self.rewrite_read()
 
         print('原始表读取完成')
 
-    def cleanOrigTable(self):
-        """清洗列表"""
+    def rewrite_read(self):
+        """
+        对读取重写
+        :return:
+        """
         pass
 
-    def insertProjTable(self):
+    def save_text(self, file_path, contents):
         """
-        入库项目表
+        保存错误文本
+        :param file_path: 文件地址
+        :param contents: 保存内容
+        :return:
         """
-        for column in self.columnIndex.keys():
-            self.df_proj_data[column] = ''
+        if not os.path.exists(file_path):
+            fp = open(file_path, 'w')  # 创建一个文本
+        else:
+            with open(file_path, 'a+') as f:
+                for content in contents:
+                    f.write('\t'.join(content) + '\n')
 
-        for i in range(len(self.df_proj_data)):
-            for column in self.columnIndex.keys():
-                if self.columnIndex[column]:
-                    self.df_proj_data.loc[i, column] = self.df_proj_data.loc[i, self.columnIndex[column]]
-                else:
-                    self.df_proj_data.loc[i, column] = '-'
+    def cleanOrigTable(self):
+        """清洗列表"""
+        error_txt_path = os.path.join(self.result_folder_path, '%s_%s.txt' % ('errorTXT', self.today))
 
-            if self.columnIndex['position']:
-                position = self.df_proj_data.loc[i, self.columnIndex['position']]
-                city, region, province = self.city_obj.get_city_no_province(position, extral_province=self.province)
-                if city is None or province is None or city != self.city:
-                    city = self.city
-                    province = self.province
-                self.df_proj_data.loc[i, 'region'] = region
-                self.df_proj_data.loc[i, 'city'] = city
-                self.df_proj_data.loc[i, 'province'] = province
-                self.df_proj_data.loc[i, 'dataTable'] = self.origTable_pro
-        print('proj表数据处理完成')
+        def extral_number(x, columns_name, table_name):
+            res_list = re.findall(r'[.\d]+', x)
+            if len(res_list) > 1 or len(res_list) == 0:
+                if len(error_list) <= 10:
+                    error_list.append([table_name, columns_name, x, '转换数字大于一个或者为空'])
+                res_list = []
+            re_str = ''.join(res_list)
+            return re_str
+
+        # 清洗项目表
+        proj_number_columns_list = self.data['proj']['number']
+        if proj_number_columns_list:
+            for te_columns in proj_number_columns_list:
+                error_list = []
+                self.df_proj_data[te_columns] = self.df_proj_data[te_columns].map(lambda x: extral_number(x, te_columns, '项目表'))
+                if len(error_list):
+                    self.save_text(error_txt_path, error_list)
+
+        # 清洗房间表
+        room_number_columns_list = self.data['room']['number']
+        if room_number_columns_list:
+            for room_columns in room_number_columns_list:
+                error_list = []
+                self.df_room[room_columns] = self.df_room[room_columns].map(lambda x: extral_number(x, te_columns, '房间表'))
+                if len(error_list):
+                    self.save_text(error_txt_path, error_list)
+
+    def countOrigTable(self):
+        """
+        :return:
+        """
 
     def loadCsvData(self, csv_path, columns, table):
 
@@ -364,34 +381,33 @@ class analyseTable:
         插入项目表
         """
         if isinstance(self.df_proj_data, pd.DataFrame):
-            self.insertProjTable()
-            sort_columns = list(self.columnIndex.keys()) + self.orig_proj_columns_insert
+            sort_columns = ['cleantime'] + list(self.data['projcolumns_dict'].keys())
+            new_columns = ['cleantime'] + list(self.data['projcolumns_dict'].values())
             self.df_proj_data = self.df_proj_data[sort_columns]
+            self.df_proj_data['cleantime'] = self.now_time
             self.df_proj_data.replace('', '-', inplace=True)
             self.df_proj_data = self.origDataReplace(self.df_proj_data)
 
             csv_path = os.path.join(self.result_folder_path, '%s_%s.csv' % (self.origTable_pro, self.today))
             self.df_proj_data.to_csv(csv_path, index=False, encoding='utf_8')
 
-            self.loadCsvData(csv_path, sort_columns, self.projTableName)
+            self.loadCsvData(csv_path, new_columns, self.projTableName)
             print('proj表插入成功')
         else:
             print('proj表无更新数据')
 
     def insetDataTable(self):
         """
-        插入第一张数据表
+        插入第1张数据表
         """
         if isinstance(self.df_room, pd.DataFrame):
-            sort_columns = ['projID'] + self.orig_room_columns_modify
+            sort_columns = ['projID'] + list(self.data['roomcolumns_dict'].keys())
+            new_columns = ['projID'] + list(self.data['roomcolumns_dict'].values())
             sql_proj = """select * from {table}""".format(table=self.projTableName)
-
             try:
                 self.conn_1.ping(reconnect=True)
             except:
                 print('self.conn_1连接失败')
-
-            room_columns = self.df_room.columns.tolist()
 
             self.df_proj = pd.read_sql(sql_proj, con=self.conn_1)
             self.df_proj.rename(columns={'id': 'projID'}, inplace=True)
@@ -399,13 +415,12 @@ class analyseTable:
                                               left_on=self.room_merge_columns, right_on=self.proj_merge_columns,
                                               how='left')
 
-            room_columns_new = ['projID'] + room_columns
-            self.df_room = self.df_room[room_columns_new]
+            self.df_room = self.df_room[sort_columns]
 
             csv_path = os.path.join(self.result_folder_path, '%s_%s.csv' % (self.origTable_room, self.today))
             self.df_room.to_csv(csv_path, index=False, encoding='utf-8')
 
-            self.loadCsvData(csv_path, sort_columns, self.dataTable)
+            self.loadCsvData(csv_path, new_columns, self.dataTable)
             print('room表插入成功')
         else:
             print('room表无更新数据')
@@ -434,18 +449,19 @@ class analyseTable:
             self.df_sta = self.df_sta[self.df_sta['buildID'].notnull()]
             sort_columns = ['projID', 'buildID', self.staStatusField, self.sta_spider_time_field]
             self.df_sta = self.df_sta[sort_columns]
+            self.df_sta['cleantime'] = self.now_time
 
             csv_path = os.path.join(self.result_folder_path, '%s_%s.csv' % (self.origTable_sta, self.today))
             self.df_sta.to_csv(csv_path, index=False, encoding='utf-8')
 
-            db_columns = ['projID', 'buildID', 'status', 'spider_time']
+            db_columns = ['projID', 'unitID', 'sales_status', 'spider_time', 'cleantime']
             self.loadCsvData(csv_path, db_columns, self.dataTable1)
             print('sta表插入成功')
         else:
             print('sta表无更新数据')
 
     # 开始生成第四第五张表
-    def getFourDate(self, tableName, origTableName, spider_time ,orig_spider_time):
+    def getFourDate(self, tableName, origTableName, spider_time, orig_spider_time):
         """
         获取数据库新增日期列表
         :return:
@@ -484,7 +500,7 @@ class analyseTable:
             print('self.conn_1连接失败')
 
         def create_dict_mess(x, result_dic):
-            dic = {wang_tool.date_number(x.values[0][5]): x.values.tolist()}
+            dic = {wang_tool.date_number(x.values[0][4]): x.values.tolist()}
             result_dic.update(dic)
 
         def read_three_mess():
@@ -495,6 +511,7 @@ class analyseTable:
             dict_mess = {}
             dateList = self.getFourDate(self.four_table, self.dataTable1, self.data['FourTable_spider_time_field'],
                                         self.data['table1_spider_time_field'])
+            print(dateList)
             if dateList:
                 sql = """select * from `{three_table}` where DATE_FORMAT({spider_time},'%Y-%m-%d') in {dateList}
                                """.format(three_table=self.dataTable1, spider_time=self.data['table1_spider_time_field'],
@@ -506,12 +523,13 @@ class analyseTable:
         dict_mess = read_three_mess()
         keys = list(dict_mess.keys())
         keys.sort()
+        print(keys)
         index_ = 0
         while index_ + 1 < len(keys):
             datas = dict_mess[keys[index_]] + dict_mess[keys[index_ + 1]]
             result_dict = {}
             for data in datas:
-                projID, buildID, status, spider_time = data[1], data[2], data[3], str(data[5])
+                projID, buildID, status, spider_time = data[1], data[2], data[3], str(data[4])
                 key = ','.join(map(lambda x: str(x), [projID, buildID]))
                 if key not in result_dict:
                     result_dict[key] = [spider_time, status, None]
@@ -542,14 +560,14 @@ class analyseTable:
                             result_dict[key][2] = '退房'
                         else:
                             pass
-
+            print(','*50, result_dict)
             for key, value_list in result_dict.items():
                 projID, buildID = key.split(',')
                 spider_time, status, result_status = value_list
                 if result_status:
-                    param = [int(projID), int(buildID), result_status, wang_tool.get_date_y_m_d(spider_time)]
+                    param = [int(buildID), result_status, wang_tool.get_date_y_m_d(spider_time), self.now_time]
                     temp_str = ','.join(map(lambda x: '%s', param))
-                    sql = """insert into {}(projID, buildID, change_status, spider_time) values({})""".format(self.four_table, temp_str)
+                    sql = """insert into {}(buildID, deal_status, spider_time, cleantime) values({})""".format(self.four_table, temp_str)
                     self.cur1.execute(sql, param)
                     self.conn_1.commit()
             index_ += 1
@@ -563,15 +581,15 @@ class analyseTable:
         pass
 
     def anlyse(self):
-        self.creat_table()
-        self.alter_table()
-        self.readOrigTable()
-        self.cleanOrigTable()
-        self.insertProj()
-        self.insetDataTable()
-        self.insetDataTable_one()
+        # self.creat_table()
+        # self.alter_table()
+        # self.readOrigTable()  # 读取
+        # self.cleanOrigTable()  # 清洗数据
+        # self.insertProj()
+        # self.insetDataTable()
+        # self.insetDataTable_one()
         self.create_four()  # 生成第四张表
-        self.create_five()  # 生成第五张表
+        # self.create_five()  # 生成第五张表
 
 
 if __name__ == '__main__':
