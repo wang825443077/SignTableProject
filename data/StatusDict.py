@@ -96,7 +96,7 @@ guangzhou = {
 ,    # 生成的proj表,固定列对应列名
     'province': '广东',
     'city': '广州市',
-    'projTextColumns': [],  # 生成的proj表,这些列格式设置为text
+    'projTextColumns': ['position'],  # 生成的proj表,这些列格式设置为text
     'roomUniqueField': 'unitID',       # room/sta表标识唯一的列
     'staStatusField': 'sales_status',  # sta表标识状态的列名
     'status_top_all': {'已过户': 5, '预售可售': 1, '强制冻结': 1, '确权不可售': 5, '不可销售': 5, '确权可售': 1},  # 城市的销售状态等级

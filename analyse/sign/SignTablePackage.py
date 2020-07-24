@@ -15,40 +15,6 @@ import utils.wang_tool as wang_tool
 from utils.提取城市 import GetCityProvince
 
 import pymysql
-conn_redis = redis.StrictRedis(host='127.0.0.1', port=6379, decode_responses=True, db=0)
-
-
-def process_func_four(new_list, data, columns_):
-    """
-    处理生成第四张表函数
-    :return:
-    """
-    while True:
-        or_x = conn_redis.spop('four_index')
-        if or_x is None:
-            break
-        if len(or_x) == 1:
-            continue
-        x = pd.DataFrame(data=eval(or_x), columns=columns_)
-        x['spider_time'] = pd.to_datetime(x['spider_time'])
-        x.drop_duplicates(subset=['spider_time'], keep='first', inplace=True)
-        x.sort_values('spider_time', inplace=True)
-        x = x.reset_index(drop=True)  # 重置索引
-        x['new_status'] = x['status'].shift(1)
-        x['result_status'] = np.nan
-        for i in range(1, len(x)):
-            new_status = x.loc[i, 'status']
-            old_status = x.loc[i, 'new_status']
-            if data['status_top_all'][old_status] > data['status_top_all'][new_status]:
-                x.loc[i, 'result_status'] = '退房'
-            elif data['status_top_all'][old_status] < data['status_top_all'][new_status]:
-                x.loc[i, 'result_status'] = '成交'
-            else:
-                # 未有变化
-                pass
-        new_df = x[x['result_status'].isna() == False][['projID', 'buildID', 'result_status', 'spider_time']]
-        new_list.append(new_df)
-        # print("程序用时:{}".format(time.time() - start))
 
 
 class analyseTable:
@@ -138,13 +104,13 @@ class analyseTable:
                     proname VARCHAR(150) DEFAULT NULL,
                     company VARCHAR(50) DEFAULT NULL,
                     position VARCHAR(255) DEFAULT NULL,
-                    ca_num VARCHAR(100) DEFAULT NULL,
+                    ca_num VARCHAR(255) DEFAULT NULL,
                     region VARCHAR(20) DEFAULT NULL,
                     city VARCHAR(20) DEFAULT NULL,
                     province VARCHAR(20) DEFAULT NULL,
                     dataTable VARCHAR(255) DEFAULT NULL,
                     spider_time datetime DEFAULT NULL,
-                    UNIQUE INDEX (proname, company, position, city, ca_num),
+                    UNIQUE INDEX (proname, company, city, ca_num),
                     PRIMARY KEY (id)            
                     )ENGINE=InnoDB DEFAULT CHARSET=utf8;""".format(Table=self.projTableName)
 
@@ -330,6 +296,7 @@ class analyseTable:
         print('原始表读取完成')
 
     def cleanOrigTable(self):
+        """清洗列表"""
         pass
 
     def insertProjTable(self):
@@ -528,11 +495,12 @@ class analyseTable:
             dict_mess = {}
             dateList = self.getFourDate(self.four_table, self.dataTable1, self.data['FourTable_spider_time_field'],
                                         self.data['table1_spider_time_field'])
-            sql = """select * from `{three_table}` where DATE_FORMAT({spider_time},'%Y-%m-%d') in {dateList}
-                           """.format(three_table=self.dataTable1, spider_time=self.data['table1_spider_time_field'],
-                                      dateList=tuple(dateList))
-            city_df = pd.read_sql(sql, con=self.conn_1)
-            city_df.groupby(['spider_time']).apply(create_dict_mess, dict_mess)
+            if dateList:
+                sql = """select * from `{three_table}` where DATE_FORMAT({spider_time},'%Y-%m-%d') in {dateList}
+                               """.format(three_table=self.dataTable1, spider_time=self.data['table1_spider_time_field'],
+                                          dateList=tuple(dateList))
+                city_df = pd.read_sql(sql, con=self.conn_1)
+                city_df.groupby(['spider_time']).apply(create_dict_mess, dict_mess)
             return dict_mess
 
         dict_mess = read_three_mess()
