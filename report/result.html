@@ -130,8 +130,8 @@ function html_escape(s) {
 <div class='heading'>
 <h1 style="font-family: Microsoft YaHei">Python Test Report</h1>
 <p class='attribute'><strong>测试人员 : </strong> QA</p>
-<p class='attribute'><strong>开始时间 : </strong> 2020-07-21 16:44:26</p>
-<p class='attribute'><strong>合计耗时 : </strong> 0:00:00.769954</p>
+<p class='attribute'><strong>开始时间 : </strong> 2020-07-25 09:14:27</p>
+<p class='attribute'><strong>合计耗时 : </strong> 0:00:00.672202</p>
 <p class='attribute'><strong>测试结果 : </strong> 共 1，错误 1，通过率 0.00%</p>
 
 <p class='description'>This  is Python  Report</p>
@@ -164,7 +164,7 @@ function html_escape(s) {
 </tr>
 
 <tr class='errorClass warning'>
-    <td>网签处理框架.case.test_beijing.beijingTestCase</td>
+    <td>case.sign.test_beijing.beijingTestCase</td>
     <td class="text-center">1</td>
     <td class="text-center">0</td>
     <td class="text-center">0</td>
@@ -185,42 +185,13 @@ function html_escape(s) {
     <pre>
     
 ft1_1: setUp
-C:\Users\yh\Anaconda3\lib\site-packages\pymysql\cursors.py:170: Warning: (1681, 'Integer display width is deprecated and will be removed in a future release.')
-  result = self._query(query)
-C:\Users\yh\Anaconda3\lib\site-packages\pymysql\cursors.py:170: Warning: (3719, "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.")
-  result = self._query(query)
-C:\Users\yh\Anaconda3\lib\site-packages\pymysql\cursors.py:170: Warning: (1050, "Table 'signproj_beijing' already exists")
-  result = self._query(query)
-C:\Users\yh\Anaconda3\lib\site-packages\pymysql\cursors.py:170: Warning: (1050, "Table 'signdata_beijing' already exists")
-  result = self._query(query)
-C:\Users\yh\Anaconda3\lib\site-packages\pymysql\cursors.py:170: Warning: (1050, "Table 'signdata_beijing_1' already exists")
-  result = self._query(query)
-建表完成
 tearDown
 Traceback (most recent call last):
-  File "C:\Users\yh\Desktop\work_dir\网签处理框架\case\test_beijing.py", line 19, in test_beijing
-    t1.anlyse()
-  File "C:\Users\yh\Desktop\work_dir\网签处理框架\analyse\preThreeTable.py", line 280, in anlyse
-    self.alter_table()
-  File "C:\Users\yh\Desktop\work_dir\网签处理框架\analyse\preThreeTable.py", line 142, in alter_table
-    self.cur1.execute(sql)
-  File "C:\Users\yh\Anaconda3\lib\site-packages\pymysql\cursors.py", line 170, in execute
-    result = self._query(query)
-  File "C:\Users\yh\Anaconda3\lib\site-packages\pymysql\cursors.py", line 328, in _query
-    conn.query(q)
-  File "C:\Users\yh\Anaconda3\lib\site-packages\pymysql\connections.py", line 517, in query
-    self._affected_rows = self._read_query_result(unbuffered=unbuffered)
-  File "C:\Users\yh\Anaconda3\lib\site-packages\pymysql\connections.py", line 732, in _read_query_result
-    result.read()
-  File "C:\Users\yh\Anaconda3\lib\site-packages\pymysql\connections.py", line 1075, in read
-    first_packet = self.connection._read_packet()
-  File "C:\Users\yh\Anaconda3\lib\site-packages\pymysql\connections.py", line 684, in _read_packet
-    packet.check_error()
-  File "C:\Users\yh\Anaconda3\lib\site-packages\pymysql\protocol.py", line 220, in check_error
-    err.raise_mysql_exception(self._data)
-  File "C:\Users\yh\Anaconda3\lib\site-packages\pymysql\err.py", line 109, in raise_mysql_exception
-    raise errorclass(errno, errval)
-pymysql.err.InternalError: (1060, "Duplicate column name 'proname_original'")
+  File "F:\git_message\SignTableProject\case\sign\test_beijing.py", line 17, in test_beijing
+    t1 = analyseTable(beijing)
+  File "F:\git_message\SignTableProject\analyse\sign\SignTablePackage.py", line 52, in __init__
+    self.proj_merge_columns = data['proj_merge_columns']
+KeyError: 'proj_merge_columns'
 
 
     </pre>

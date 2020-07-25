@@ -7,7 +7,6 @@ from data.StatusDict import *
 
 
 class beijingTestCase(unittest.TestCase):
-
     def setUp(self):
         print("setUp")
 
