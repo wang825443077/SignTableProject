@@ -140,7 +140,7 @@ shenzhen = {
     'city': '深圳市',
     'projTextColumns': ['position'],  # 生成的proj表,这些列格式设置为text
     'roomUniqueField': 'hu_link',  # room/sta表标识唯一的列origTable_room
-    'staStatusField': 'sales_status',  # sta表标识状态的列名
+    'staStatusField': 'sale_state',  # sta表标识状态的列名
     'status_top_all': {
         '已签预售合同': 5, '已备案': 1, '期房待售': 1, '已签认购书': 1, '司法查封': 1, '区局锁定': 1, '系统自动锁定': 1,
         '未知': 1, '初始登记': 1

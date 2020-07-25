@@ -12,7 +12,7 @@ class Guangzhou(analyseTable):
     def __init__(self, guangzhou):
         super().__init__(guangzhou)
 
-    def getAddDate(self, tableName, origTableName, spider_time ,orig_spider_time):
+    def getAddDate(self, tableName, origTableName, spider_time,orig_spider_time):
         """
         获取数据库新增日期列表
         :return:
