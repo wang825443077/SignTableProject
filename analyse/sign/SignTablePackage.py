@@ -214,7 +214,6 @@ class analyseTable:
                  """.format(proTable=self.origTable_pro,columns=room_columns)
         sql_room = """select * from {table}""".format(table=self.origTable_room)
         sql_sta = """select * from {table}""".format(table=self.origTable_sta)
-
         try:
             self.conn_1.ping(reconnect=True)
         except:
@@ -308,6 +307,7 @@ class analyseTable:
         """清洗列表"""
         error_txt_path = os.path.join(self.result_folder_path, '%s_%s.txt' % ('errorTXT', self.today))
         self.f = open(error_txt_path, 'w')  # 创建一个文本
+
         def extral_number(x, columns_name, table_name):
             res_list = re.findall(r'[.\d]+', x)
             if len(res_list) > 1 or len(res_list) == 0:
@@ -324,7 +324,7 @@ class analyseTable:
                 error_list = []
                 self.df_proj_data[te_columns] = self.df_proj_data[te_columns].map(lambda x: extral_number(x, te_columns, '项目表'))
                 if len(error_list):
-                    self.save_text(error_txt_path, error_list)
+                    self.save_text(error_list)
 
         # 清洗房间表
         room_number_columns_list = self.data['room']['number']
@@ -333,7 +333,7 @@ class analyseTable:
                 error_list = []
                 self.df_room[room_columns] = self.df_room[room_columns].map(lambda x: extral_number(x, te_columns, '房间表'))
                 if len(error_list):
-                    self.save_text(error_txt_path, error_list)
+                    self.save_text(error_list)
 
 
     def loadCsvData(self, csv_path, columns, table):
@@ -377,8 +377,9 @@ class analyseTable:
         if isinstance(self.df_proj_data, pd.DataFrame):
             sort_columns = ['cleantime'] + list(self.data['projcolumns_dict'].keys())
             new_columns = ['cleantime'] + list(self.data['projcolumns_dict'].values())
-            self.df_proj_data = self.df_proj_data[sort_columns]
             self.df_proj_data['cleantime'] = self.now_time
+            self.df_proj_data = self.df_proj_data[sort_columns]
+
             self.df_proj_data.replace('', '-', inplace=True)
             self.df_proj_data = self.origDataReplace(self.df_proj_data)
 
@@ -680,6 +681,6 @@ class analyseTable:
 if __name__ == '__main__':
     start = time.time()
     from data.StatusDict import *
-    t1 = analyseTable(guangzhou)
+    t1 = analyseTable(shenzhen)
     t1.anlyse()
     print(time.time() - start)

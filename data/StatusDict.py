@@ -90,7 +90,6 @@ guangzhou = {
     'roomUniqueField': 'unitID',       # room/sta表标识唯一的列origTable_room
     'staStatusField': 'sales_status',  # sta表标识状态的列名
     'status_top_all': {'已过户': 5, '预售可售': 1, '强制冻结': 1, '确权不可售': 5, '不可销售': 5, '确权可售': 1},  # 城市的销售状态等级
-    'area': 'Expected_area_m2',    # 面积对应字段
 
     # 清洗列
     'proj': {'number': ['area_m2', 'scale_m2']},
@@ -108,5 +107,67 @@ guangzhou = {
 }
 
 
+shenzhen = {
+    # 数据库连接
+    'origDB': mysql_address['80'],  # 网签原始数据库
+    'localDB': mysql_address['62'],  # 保存处理结果数据库
+    # 原始表名
+    'origTable_pro': 'shenzhen0101_pro',
+    'origTable_room': 'shenzhen0101_room',
+    'origTable_sta': 'shenzhen0101_sta',
+    # 生成表名
+    'projTableName': 'signproj_shenzhen',  # 第一张表
+    'dataTable': 'signdata_shenzhen_2',  # 第二张表
+    'dataTable1': 'signdata_shenzhen_3',  # 第三张表
+    'FourTable': 'signdata_shenzhen_4',  # 第四张表
+    'FiveTable': 'signdata_shenzhen_5',  # 第五张表
+    # 爬取时间列
+    'proj_spider_time_field': 'spidertime',
+    'room_spider_time_field': 'spidertime',
+    'sta_spider_time_field': 'spidertime',
+    'signproj_spider_time_field': 'spidertime',
+    'dataTable_spider_time_field': 'spidertime',
+    'table1_spider_time_field': 'spider_time',
+    'FourTable_spider_time_field': 'spider_time',
+    'FiveTable_spider_time_field': 'spider_time',
+    # 表连接字段
+    'proj_merge_columns': ['pro_link'],  # 生成的proj表
+    'room_merge_columns': ['pro_link'],  # 原始room表
+    # 其他
 
+    # 生成的proj表,固定列对应列名
+    'province': '广东',
+    'city': '深圳市',
+    'projTextColumns': ['position'],  # 生成的proj表,这些列格式设置为text
+    'roomUniqueField': 'hu_link',  # room/sta表标识唯一的列origTable_room
+    'staStatusField': 'sales_status',  # sta表标识状态的列名
+    'status_top_all': {
+        '已签预售合同': 5, '已备案': 1, '期房待售': 1, '已签认购书': 1, '司法查封': 1, '区局锁定': 1, '系统自动锁定': 1,
+        '未知': 1, '初始登记': 1
+    },  # 城市的销售状态等级
+
+    # 清洗列
+    'proj': {'number': ['base_area', 'ancestral_area', 'toscale', 'tonum', 'toarea', 'tonum_onsale_']},
+    'room': {'number': ['sale_price', 'scale', 'inside_area1', 'shared_area_start', 'inside_area2',
+                        'shared_area_end', 'scale_end']},
+    'projcolumns_dict': {
+        'url': 'pro_link', 'proname': 'pro_name', 'company': 'company', 'ca_num': 'ca_num',
+        'land_location': 'land_location', 'approval_time': 'approval_time', 'land_num2': 'land_num',
+        'district': 'district', 'land_date': 'land_date', 'region': 'region', 'ownership_source': 'ownership_source',
+        'approval_auth': 'approval_auth', 'contract_doc': 'contract_doc', 'durable_yeas': 'durable_yeas',
+        'sup_agreement': 'sup_agreement', 'permit': 'permit', 'room_use': 'room_use', 'land_use': 'land_use',
+        'land_lever': 'land_lever', 'base_area': 'base_area', 'ancestral_area': 'ancestral_area', 'toscale': 'toscale',
+        'tonum': 'tonum', 'toarea': 'toarea', 'tonum_onsale': 'tonum_onsale', 'tonum_onsale_': 'tonum_onsale_',
+        'spidertime': 'spidertime'
+                         },
+
+    'roomcolumns_dict': {
+        'hu_link': 'hu_link', 'pro_link': 'pro_link', 'Building_name': 'building_name', 'projectnum': 'projectnum',
+        'construnum': 'construnum', 'seatnum': 'seatnum', 'floor': 'floor', 'roomnum': 'roomnum',
+        'sale_state': 'Sale_state', 'project_vul': 'Project_vul', 'contract_num': 'contract_num',
+        'sale_price': 'sale_price', 'use': 'use_', 'scale': 'scale', 'inside_area1': 'inside_area1',
+        'shared_area_start': 'shared_area_start', 'inside_area2': 'inside_area2', 'shared_area_end': 'shared_area_end',
+        'scale_end': 'Scale_end', 'spidertime': 'spidertime'
+    }
+}
 
