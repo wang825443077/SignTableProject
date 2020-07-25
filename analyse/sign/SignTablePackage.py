@@ -138,7 +138,7 @@ class analyseTable:
               `dealnum` int(11) NULL DEFAULT NULL COMMENT '套数',
               `dealarea` double(255, 2) NULL DEFAULT NULL COMMENT '面积',
               `dealamount` double(255, 2) NULL DEFAULT NULL COMMENT '金额',
-              `spidertime` datetime NULL DEFAULT NULL COMMENT '爬取更新时间',
+              `spider_time` datetime NULL DEFAULT NULL COMMENT '爬取更新时间',
               `cleantime` datetime NULL DEFAULT NULL COMMENT '清洗时间'
             ) ENGINE = InnoDB CHARACTER SET = utf8 COLLATE = utf8_general_ci ROW_FORMAT = Dynamic;""".format(self.five_table)
 
@@ -199,7 +199,7 @@ class analyseTable:
         :return:
         """
         sql_table_date = """select distinct DATE_FORMAT({spider_time},'%Y-%m-%d')  from {Table}"""
-        print(sql_table_date.format(spider_time=spider_time, Table=tableName))
+        # print(sql_table_date.format(spider_time=spider_time, Table=tableName))
         df_table_date = pd.read_sql(sql_table_date.format(spider_time=spider_time, Table=tableName), con=self.conn_1)
         df_orig_table_date = pd.read_sql(sql_table_date.format(spider_time=orig_spider_time, Table=origTableName), con=self.conn_2)
 
@@ -412,9 +412,15 @@ class analyseTable:
             self.df_room['cleantime'] = self.now_time
             self.df_room = self.df_room[sort_columns]
 
+            self.df_room_err = self.df_room[self.df_room['projID'].isnull()]
+            df_room_err_csv_path = os.path.join(self.result_folder_path,
+                                               '%s_%s_%s.csv' % (self.origTable_room, '匹配不到id', self.today))
+            self.df_room_err.to_csv(df_room_err_csv_path, index=False, encoding='utf-8')
+
+            self.df_room = self.df_room[self.df_room['projID'].notnull()]
+
             csv_path = os.path.join(self.result_folder_path, '%s_%s.csv' % (self.origTable_room, self.today))
             self.df_room.to_csv(csv_path, index=False, encoding='utf-8')
-
             self.loadCsvData(csv_path, new_columns, self.dataTable)
             print('room表插入成功')
         else:
@@ -677,21 +683,21 @@ class analyseTable:
                 f.write(s)
 
     def anlyse(self):
-        # self.creat_table()
-        # self.alter_table()
-        # self.readOrigTable()  # 读取
-        # self.cleanOrigTable()  # 清洗数据
-        # self.insertProj()
-        # self.insetDataTable()
-        # self.insetDataTable_one()
-        # self.create_four()  # 生成第四张表
-        self.create_five()  # 生成第五张表
+        self.creat_table()
+        self.alter_table()
+        self.readOrigTable()  # 读取
+        self.cleanOrigTable()  # 清洗数据
+        self.insertProj()
+        self.insetDataTable()
+        self.insetDataTable_one()
+        self.create_four()  # 生成第四张表
+        # self.create_five()  # 生成第五张表
         # self.countOrigTable()  # 统计函数
 
 
 if __name__ == '__main__':
     start = time.time()
     from data.StatusDict import *
-    t1 = analyseTable(guangzhou)
+    t1 = analyseTable(shenzhen)
     t1.anlyse()
     print(time.time() - start)
