@@ -67,6 +67,7 @@ class analyseTable:
         self.data_table1_exists = False
         self.four_table_exists = False
         self.five_table_exists = False
+        self.roomStatusChange = False
 
         df_conn_1_tables = pd.read_sql('show tables;', con=self.conn_1)
         self.conn_1_tables = df_conn_1_tables.iloc[:, 0].tolist()
@@ -456,9 +457,10 @@ class analyseTable:
             self.df_room = self.df_room[sort_columns]
 
             self.df_room_err = self.df_room[self.df_room['projID'].isnull()]
-            df_room_err_csv_path = os.path.join(self.result_folder_path,
-                                               '%s_%s_%s.csv' % (self.origTable_room, '匹配不到id', self.today))
-            self.df_room_err.to_csv(df_room_err_csv_path, index=False, encoding='utf-8')
+            if not self.df_room_err.empty:
+                df_room_err_csv_path = os.path.join(self.result_folder_path,
+                                                   '%s_%s_%s.csv' % (self.origTable_room, '匹配不到id', self.today))
+                self.df_room_err.to_csv(df_room_err_csv_path, index=False, encoding='utf-8')
 
             self.df_room = self.df_room[self.df_room['projID'].notnull()]
 
@@ -486,9 +488,10 @@ class analyseTable:
 
             self.df_sta = self.df_sta.merge(self.df_data_table, on=[self.roomUniqueField], how='left')
             self.df_sta_err = self.df_sta[self.df_sta['buildID'].isnull()]
-            df_sta_err_csv_path = os.path.join(self.result_folder_path,
-                                               '%s_%s_%s.csv' % (self.origTable_sta, '匹配不到id', self.today))
-            self.df_sta_err.to_csv(df_sta_err_csv_path, index=False, encoding='utf-8')
+            if not self.df_sta_err.empty:
+                df_sta_err_csv_path = os.path.join(self.result_folder_path,
+                                                   '%s_%s_%s.csv' % (self.origTable_sta, '匹配不到id', self.today))
+                self.df_sta_err.to_csv(df_sta_err_csv_path, index=False, encoding='utf-8')
 
             self.df_sta = self.df_sta[self.df_sta['buildID'].notnull()]
             sort_columns = ['projID', 'buildID', self.staStatusField, self.sta_spider_time_field]
@@ -542,6 +545,7 @@ class analyseTable:
             self.conn_1.ping(reconnect=True)
         except:
             print('self.conn_1连接失败')
+        self.roomStatusChange = False
 
         def create_dict_mess(x, result_dic):
             dic = {wang_tool.date_number(x.values[0][4]): x.values.tolist()}
@@ -604,11 +608,12 @@ class analyseTable:
                             result_dict[key][2] = '2'
                         else:
                             pass
-            # print(','*50, result_dict)
+
             for key, value_list in result_dict.items():
                 projID, buildID = key.split(',')
                 spider_time, status, result_status = value_list
                 if result_status:
+                    self.roomStatusChange = True
                     param = [int(buildID), result_status, wang_tool.get_date_y_m_d(spider_time), self.now_time]
                     temp_str = ','.join(map(lambda x: '%s', param))
                     sql = """insert into {}(buildID, deal_status, spider_time, cleantime) values({})""".format(self.four_table, temp_str)
@@ -622,14 +627,15 @@ class analyseTable:
         第五张表
         :return:
         """
+        if self.roomStatusChange:
+            dataList = self.getAddDate( self.five_table, self.four_table, self.data['FiveTable_spider_time_field'],
+                                        self.data['FourTable_spider_time_field'], self.conn_1)
+            if len(dataList) == 1:
+                self.five_dateList = "('{}')".format(dataList[0])
+            else:
+                self.five_dateList = str(tuple(dataList))
 
-        dataList = self.getAddDate( self.five_table, self.four_table, self.data['FiveTable_spider_time_field'], self.data['FourTable_spider_time_field'], self.conn_1)
-        if len(dataList) == 1:
-            self.five_dateList = "('{}')".format(dataList[0])
-        else:
-            self.five_dateList = str(tuple(dataList))
-
-        self.save_five()
+            self.save_five()
 
     def save_five(self):
         """
@@ -705,15 +711,15 @@ class analyseTable:
 
 
     def anlyse(self):
-        # self.creat_table()
-        # self.alter_table()
-        # self.readOrigTable()  # 读取
-        # self.checkOrigTable()
-        # self.cleanOrigTable()  # 清洗数据
-        # self.insertProj()
-        # self.insetDataTable()
-        # self.insetDataTable_one()
-        # self.create_four()  # 生成第四张表
+        self.creat_table()
+        self.alter_table()
+        self.readOrigTable()  # 读取
+        self.checkOrigTable()
+        self.cleanOrigTable()  # 清洗数据
+        self.insertProj()
+        self.insetDataTable()
+        self.insetDataTable_one()
+        self.create_four()  # 生成第四张表
         self.create_five()  # 生成第五张表
         self.countOrigTable()  # 统计函数
         self.f.close()
