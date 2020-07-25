@@ -63,6 +63,14 @@ class Guangzhou(analyseTable):
         重写第五张表
         :return:
         """
+        sql = """SELECT one.proname, two.expected_area, four.* FROM `{table4}` as four
+                            left JOIN `{table2}` as two on two.id = four.buildID
+                            left JOIN `{table1}` as one on one.id = two.projID 
+                            where DATE_FORMAT(four.{spider_time},'%Y-%m-%d') in {dateList} """ \
+            .format(table1=self.projTableName, table2=self.dataTable, table4=self.four_table,
+                    spider_time=self.data['FourTable_spider_time_field'], dateList=self.five_dateList)
+
+        self.df_five = pd.read_sql(sql, con=self.conn_1)
         self.df_five['expected_area'] = self.df_five['expected_area'].map(lambda x: float(x))
         sum_df = self.df_five.groupby(['proname', 'deal_status', 'spider_time'], as_index=False)['expected_area'].sum()
         len_df = self.df_five.groupby(['proname', 'deal_status', 'spider_time'], as_index=False).count()

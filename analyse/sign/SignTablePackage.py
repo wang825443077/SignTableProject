@@ -198,7 +198,7 @@ class analyseTable:
         获取数据库新增日期列表
         :return:
         """
-        sql_table_date = """select distinct DATE_FORMAT('{spider_time}','%Y-%m-%d')  from {Table}"""
+        sql_table_date = """select distinct DATE_FORMAT({spider_time},'%Y-%m-%d')  from {Table}"""
         print(sql_table_date.format(spider_time=spider_time, Table=tableName))
         df_table_date = pd.read_sql(sql_table_date.format(spider_time=spider_time, Table=tableName), con=self.conn_1)
         df_orig_table_date = pd.read_sql(sql_table_date.format(spider_time=orig_spider_time, Table=origTableName), con=self.conn_2)
@@ -576,17 +576,10 @@ class analyseTable:
         dataList = self.getAddDate(self.four_table, self.five_table, self.data['FourTable_spider_time_field'],
                                    self.data['FiveTable_spider_time_field'])
         if len(dataList) == 1:
-            dateList = "('{}')".format(dataList[0])
+            self.five_dateList = "('{}')".format(dataList[0])
         else:
-            dateList = str(tuple(dataList))
-        sql = """SELECT one.proname, two.expected_area, four.* FROM `{table4}` as four
-                    left JOIN `{table2}` as two on two.id = four.buildID
-                    left JOIN `{table1}` as one on one.id = two.projID 
-                    where DATE_FORMAT(four.{spider_time},'%Y-%m-%d') in {dateList} """ \
-            .format(table1=self.projTableName, table2=self.dataTable, table4=self.four_table,
-                    spider_time=self.data['FourTable_spider_time_field'], dateList=dateList)
+            self.five_dateList = str(tuple(dataList))
 
-        self.df_five = pd.read_sql(sql, con=self.conn_1)
         self.save_five()
 
     def save_five(self):
@@ -657,7 +650,7 @@ class analyseTable:
                 s = '日期:%s,  项目数:%s\n' % (i[0], i[1])
                 f.write(s)
 
-            proj_num_before = df_recent_two_day.loc[df_recent_two_day['日期']==recent_two_day[0], '项目数'].values[0]
+            proj_num_before = df_recent_two_day.loc[df_recent_two_day['日期'] ==recent_two_day[0], '项目数'].values[0]
             proj_num_last = df_recent_two_day.loc[df_recent_two_day['日期']==recent_two_day[1], '项目数'].values[0]
             proj_diff_num = proj_num_last - proj_num_before
             if proj_diff_num >= 0:
