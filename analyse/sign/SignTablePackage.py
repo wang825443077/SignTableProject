@@ -396,8 +396,8 @@ class analyseTable:
         插入第1张数据表
         """
         if isinstance(self.df_room, pd.DataFrame):
-            sort_columns = ['projID', 'cleamtime'] + list(self.data['roomcolumns_dict'].keys())
-            new_columns = ['projID', 'cleamtime'] + list(self.data['roomcolumns_dict'].values())
+            sort_columns = ['projID', 'cleantime'] + list(self.data['roomcolumns_dict'].keys())
+            new_columns = ['projID', 'cleantime'] + list(self.data['roomcolumns_dict'].values())
             sql_proj = """select * from {table}""".format(table=self.projTableName)
             try:
                 self.conn_1.ping(reconnect=True)
@@ -409,7 +409,7 @@ class analyseTable:
             self.df_room = self.df_room.merge(self.df_proj[['projID'] + self.proj_merge_columns],
                                               left_on=self.room_merge_columns, right_on=self.proj_merge_columns,
                                               how='left')
-            self.df_room['cleamtime'] = self.now_time
+            self.df_room['cleantime'] = self.now_time
             self.df_room = self.df_room[sort_columns]
 
             csv_path = os.path.join(self.result_folder_path, '%s_%s.csv' % (self.origTable_room, self.today))
