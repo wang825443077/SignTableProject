@@ -136,8 +136,8 @@ class analyseTable:
               `proname` varchar(100) CHARACTER SET utf8 COLLATE utf8_general_ci NULL DEFAULT NULL COMMENT '项目名称',
               `deal_status` varchar(1) CHARACTER SET utf8 COLLATE utf8_general_ci NULL DEFAULT NULL COMMENT '交易类型',
               `dealnum` int(11) NULL DEFAULT NULL COMMENT '套数',
-              `dealarea` double NULL DEFAULT NULL COMMENT '面积',
-              `dealamount` double(255, 0) NULL DEFAULT NULL COMMENT '金额',
+              `dealarea` double(255, 2) NULL DEFAULT NULL COMMENT '面积',
+              `dealamount` double(255, 2) NULL DEFAULT NULL COMMENT '金额',
               `spidertime` datetime NULL DEFAULT NULL COMMENT '爬取更新时间',
               `cleantime` datetime NULL DEFAULT NULL COMMENT '清洗时间'
             ) ENGINE = InnoDB CHARACTER SET = utf8 COLLATE = utf8_general_ci ROW_FORMAT = Dynamic;""".format(self.five_table)
@@ -198,7 +198,8 @@ class analyseTable:
         获取数据库新增日期列表
         :return:
         """
-        sql_table_date = """select distinct DATE_FORMAT({spider_time},'%Y-%m-%d')  from {Table}"""
+        sql_table_date = """select distinct DATE_FORMAT('{spider_time}','%Y-%m-%d')  from {Table}"""
+        print(sql_table_date.format(spider_time=spider_time, Table=tableName))
         df_table_date = pd.read_sql(sql_table_date.format(spider_time=spider_time, Table=tableName), con=self.conn_1)
         df_orig_table_date = pd.read_sql(sql_table_date.format(spider_time=orig_spider_time, Table=origTableName), con=self.conn_2)
 
@@ -324,7 +325,7 @@ class analyseTable:
                 error_list = []
                 self.df_proj_data[te_columns] = self.df_proj_data[te_columns].map(lambda x: extral_number(x, te_columns, '项目表'))
                 if len(error_list):
-                    self.save_text(error_txt_path, error_list)
+                    self.save_text(error_list)
 
         # 清洗房间表
         room_number_columns_list = self.data['room']['number']
@@ -333,7 +334,7 @@ class analyseTable:
                 error_list = []
                 self.df_room[room_columns] = self.df_room[room_columns].map(lambda x: extral_number(x, te_columns, '房间表'))
                 if len(error_list):
-                    self.save_text(error_txt_path, error_list)
+                    self.save_text(error_list)
 
 
     def loadCsvData(self, csv_path, columns, table):
@@ -377,8 +378,8 @@ class analyseTable:
         if isinstance(self.df_proj_data, pd.DataFrame):
             sort_columns = ['cleantime'] + list(self.data['projcolumns_dict'].keys())
             new_columns = ['cleantime'] + list(self.data['projcolumns_dict'].values())
-            self.df_proj_data = self.df_proj_data[sort_columns]
             self.df_proj_data['cleantime'] = self.now_time
+            self.df_proj_data = self.df_proj_data[sort_columns]
             self.df_proj_data.replace('', '-', inplace=True)
             self.df_proj_data = self.origDataReplace(self.df_proj_data)
 
@@ -531,9 +532,9 @@ class analyseTable:
                     last_spider_time, last_status = result_dict[key][0], result_dict[key][1]
                     if wang_tool.date_number(last_spider_time) < wang_tool.date_number(spider_time):
                         if self.data['status_top_all'][str(last_status)] > self.data['status_top_all'][str(status)]:
-                            result_dict[key][2] = '退房'
+                            result_dict[key][2] = '2'
                         elif self.data['status_top_all'][str(last_status)] < self.data['status_top_all'][str(status)]:
-                            result_dict[key][2] = '成交'
+                            result_dict[key][2] = '1'
                         else:
                             pass
                         # 更新成最新的状态
@@ -541,17 +542,17 @@ class analyseTable:
 
                     elif wang_tool.date_number(last_spider_time) > wang_tool.date_number(spider_time):
                         if self.data['status_top_all'][str(last_status)] > self.data['status_top_all'][str(status)]:
-                            result_dict[key][2] = '成交'
+                            result_dict[key][2] = '1'
                         elif self.data['status_top_all'][str(last_status)] < self.data['status_top_all'][str(status)]:
-                            result_dict[key][2] = '退房'
+                            result_dict[key][2] = '2'
                         else:
                             pass
 
                     else:
                         if self.data['status_top_all'][str(last_status)] > self.data['status_top_all'][str(status)]:
-                            result_dict[key][2] = '成交'
+                            result_dict[key][2] = '1'
                         elif self.data['status_top_all'][str(last_status)] < self.data['status_top_all'][str(status)]:
-                            result_dict[key][2] = '退房'
+                            result_dict[key][2] = '2'
                         else:
                             pass
             # print(','*50, result_dict)
@@ -570,6 +571,27 @@ class analyseTable:
     def create_five(self):
         """
         第五张表
+        :return:
+        """
+        dataList = self.getAddDate(self.four_table, self.five_table, self.data['FourTable_spider_time_field'],
+                                   self.data['FiveTable_spider_time_field'])
+        if len(dataList) == 1:
+            dateList = "('{}')".format(dataList[0])
+        else:
+            dateList = str(tuple(dataList))
+        sql = """SELECT one.proname, two.expected_area, four.* FROM `{table4}` as four
+                    left JOIN `{table2}` as two on two.id = four.buildID
+                    left JOIN `{table1}` as one on one.id = two.projID 
+                    where DATE_FORMAT(four.{spider_time},'%Y-%m-%d') in {dateList} """ \
+            .format(table1=self.projTableName, table2=self.dataTable, table4=self.four_table,
+                    spider_time=self.data['FourTable_spider_time_field'], dateList=dateList)
+
+        self.df_five = pd.read_sql(sql, con=self.conn_1)
+        self.save_five()
+
+    def save_five(self):
+        """
+        重写函数
         :return:
         """
         pass
@@ -591,7 +613,7 @@ class analyseTable:
                     self.projOrigFieldData[proj_column] = {}
                 self.projOrigFieldData[proj_column]['列值为空占比'] = \
                                 self.df_proj_data[proj_column].isnull().sum() / orig_data_len * 100
-            print(self.projOrigFieldData)
+
 
         # 项目数
         sql_proj_num = """select count(*) as projTotalnum from {table}""".format(table=self.origTable_pro)
@@ -602,7 +624,6 @@ class analyseTable:
                             where DATE_FORMAT({spider_time},'%Y-%m-%d') != '0000-00-00'"""
         df_orig_table_date = pd.read_sql(sql_table_date.format(spider_time=self.data['table1_spider_time_field'],
                                                                Table=self.dataTable1), con=self.conn_1)
-        print(df_orig_table_date)
         df_orig_table_date = [i for i in df_orig_table_date.iloc[:, 0].tolist() if i != 'None']
         df_orig_table_date = pd.to_datetime(df_orig_table_date)
         recent_two_day = sorted(df_orig_table_date)[-2:]
@@ -616,7 +637,6 @@ class analyseTable:
                         """.format(spider_time=self.data['table1_spider_time_field'], Table=self.dataTable1,
                                    date_list=tuple(recent_two_day))
         df_recent_two_day = pd.read_sql(sql_orig_proj, con=self.conn_1)
-        print(df_recent_two_day)
 
         # 房间数
         sql_orig_room = """select DATE_FORMAT({spider_time},'%Y-%m-%d') as date,deal_status as '房间状态变化',
@@ -625,7 +645,6 @@ class analyseTable:
                            group by DATE_FORMAT({spider_time},'%Y-%m-%d'), deal_status
                         """.format(spider_time=self.data['FourTable_spider_time_field'], Table=self.four_table)
         df_sql_orig_room = pd.read_sql(sql_orig_room, con=self.conn_1)
-        print(df_sql_orig_room)
 
         with open(count_txt_path, 'w') as f:
             f.write('项目表列空占比\n')
@@ -665,16 +684,16 @@ class analyseTable:
                 f.write(s)
 
     def anlyse(self):
-        self.creat_table()
-        self.alter_table()
-        self.readOrigTable()  # 读取
-        self.cleanOrigTable()  # 清洗数据
-        self.insertProj()
-        self.insetDataTable()
-        self.insetDataTable_one()
-        self.create_four()  # 生成第四张表
+        # self.creat_table()
+        # self.alter_table()
+        # self.readOrigTable()  # 读取
+        # self.cleanOrigTable()  # 清洗数据
+        # self.insertProj()
+        # self.insetDataTable()
+        # self.insetDataTable_one()
+        # self.create_four()  # 生成第四张表
         self.create_five()  # 生成第五张表
-        self.countOrigTable()  # 统计函数
+        # self.countOrigTable()  # 统计函数
 
 
 if __name__ == '__main__':
