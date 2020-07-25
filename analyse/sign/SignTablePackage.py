@@ -86,9 +86,8 @@ class analyseTable:
             self.five_table_exists = True
 
         self.now_time = str(datetime.datetime.now().strftime('%Y-%m-%d'))
-
-        self.projOrigFieldData = {}
-        self.roomOrigFieldData = {}
+        error_txt_path = os.path.join(self.result_folder_path, '%s_%s.txt' % ('errorTXT', self.today))
+        self.f = open(error_txt_path, 'w')  # 创建一个文本
 
     def getTableColumns(self, tableName, con):
         sql = """show full columns FROM `{}`""".format(tableName)
@@ -193,7 +192,7 @@ class analyseTable:
         else:
             print('新增列完成')
 
-    def getAddDate(self, tableName, origTableName, spider_time ,orig_spider_time):
+    def getAddDate(self, tableName, origTableName, spider_time ,orig_spider_time, conn_te):
         """
         获取数据库新增日期列表
         :return:
@@ -201,7 +200,7 @@ class analyseTable:
         sql_table_date = """select distinct DATE_FORMAT({spider_time},'%Y-%m-%d')  from {Table}"""
         # print(sql_table_date.format(spider_time=spider_time, Table=tableName))
         df_table_date = pd.read_sql(sql_table_date.format(spider_time=spider_time, Table=tableName), con=self.conn_1)
-        df_orig_table_date = pd.read_sql(sql_table_date.format(spider_time=orig_spider_time, Table=origTableName), con=self.conn_2)
+        df_orig_table_date = pd.read_sql(sql_table_date.format(spider_time=orig_spider_time, Table=origTableName), con=conn_te)
 
         table_date = {te for te in df_table_date.iloc[:, 0].tolist() if str(te) != 'None'}
         orig_table_date = {te for te in df_orig_table_date.iloc[:, 0].tolist() if str(te) != 'None'}
@@ -223,7 +222,7 @@ class analyseTable:
 
         if self.proj_exists:
             orig_add_date = self.getAddDate(self.projTableName, self.origTable_pro,
-                                            self.data['signproj_spider_time_field'], self.proj_spider_time_field)
+                                            self.data['signproj_spider_time_field'], self.proj_spider_time_field, self.conn_2)
             if orig_add_date:
                 if len(orig_add_date) == 1:
                     dateList = "('{}')".format(orig_add_date[0])
@@ -238,7 +237,7 @@ class analyseTable:
                 sql_proj = ''
 
         if self.data_table_exists:
-            room_add_date = self.getAddDate(self.dataTable, self.origTable_room, self.room_spider_time_field, self.room_spider_time_field)
+            room_add_date = self.getAddDate(self.dataTable, self.origTable_room, self.room_spider_time_field, self.room_spider_time_field, self.conn_2)
             if room_add_date:
                 if len(room_add_date) == 1:
                     dateList = "('{}')".format(room_add_date[0])
@@ -252,7 +251,7 @@ class analyseTable:
                 sql_room = ''
 
         if self.data_table1_exists:
-            sta_add_date = self.getAddDate(self.dataTable1, self.origTable_sta, self.data['table1_spider_time_field'], self.sta_spider_time_field)
+            sta_add_date = self.getAddDate(self.dataTable1, self.origTable_sta, self.data['table1_spider_time_field'], self.sta_spider_time_field, self.conn_2)
             if sta_add_date:
                 if len(sta_add_date) == 1:
                     dateList = "('{}')".format(sta_add_date[0])
@@ -266,7 +265,7 @@ class analyseTable:
                 sql_sta = ''
         if sql_proj:
             self.df_proj_data = pd.read_sql(sql_proj, con=self.conn_2)
-            self.df_proj_data.fillna('', inplace=True)
+            self.df_proj_data.replace('', np.nan, inplace=True)
             # self.df_proj_data.columns = list(self.data['projcolumns_dict'].values())
         else:
             self.df_proj_data = ''
@@ -274,13 +273,13 @@ class analyseTable:
 
         if sql_room:
             self.df_room = pd.read_sql(sql_room, con=self.conn_2)
-            self.df_room.fillna('', inplace=True)
+            self.df_room.replace('', np.nan, inplace=True)
         else:
             self.df_room = ''
         print('df_room', len(self.df_room))
         if sql_sta:
             self.df_sta = pd.read_sql(sql_sta, con=self.conn_2)
-            self.df_sta.fillna('', inplace=True)
+            self.df_sta.replace('', np.nan, inplace=True)
         else:
             self.df_sta = ''
         print('df_sta', len(self.df_sta))
@@ -295,6 +294,51 @@ class analyseTable:
         """
         pass
 
+    def checkColumns(self, df, errOutColumns: list, FieldCheckData):
+        # 列为空个数
+        if isinstance(df, pd.DataFrame):
+            orig_columns = df.columns.tolist()
+            orig_data_len = len(df)
+            for column in orig_columns:
+                if column not in FieldCheckData:
+                    FieldCheckData[column] = {'空值行': []}
+                FieldCheckData[column]['列值为空占比'] = \
+                    df[column].isnull().sum() / orig_data_len * 100
+                if FieldCheckData[column]['列值为空占比'] > 0:
+                    df_empty = df[df[column].isnull()]
+                    df_empty = df_empty.reset_index(drop=True)
+                    for i in range(min(10, len(df_empty))):
+                        err_data = []
+                        for err_column in errOutColumns:
+                            data = df_empty.loc[i, err_column]
+                            err_data.append(data)
+                        FieldCheckData[column]['空值行'].append(err_data)
+            # print(FieldCheckData)
+            return FieldCheckData
+
+    def checkOrigTable(self):
+        projOrigFieldCheckData = {}
+        roomOrigFieldCheckData = {}
+        staOrigFieldCheckData = {}
+        projOrigFieldCheckData = self.checkColumns(self.df_proj_data, self.data['proj_err_out_columns'], projOrigFieldCheckData)
+        roomOrigFieldCheckData = self.checkColumns(self.df_room, self.data['room_err_out_columns'], roomOrigFieldCheckData)
+        staOrigFieldCheckData = self.checkColumns(self.df_sta, self.data['sta_err_out_columns'], staOrigFieldCheckData)
+
+        def saveColumnNanValue(FieldcheckData: dict):
+            for column, data in FieldcheckData.items():
+                self.f.write('列名:%s\t占比:%.2f%%\n' % (column, data['列值为空占比']))
+                if data['空值行']:
+                    for err_line in data['空值行']:
+                        self.f.write('列关键信息:%s\n' % (', '.join(err_line)))
+                self.f.write('\n' + '-'*50 + '\n')
+
+        self.f.write('proj表 空行及空行占比\n')
+        saveColumnNanValue(projOrigFieldCheckData)
+        self.f.write('room表 空行及空行占比\n')
+        saveColumnNanValue(roomOrigFieldCheckData)
+        self.f.write('sta表 空行及空行占比\n')
+        saveColumnNanValue(staOrigFieldCheckData)
+
     def save_text(self, contents):
         """
         保存错误文本
@@ -307,13 +351,13 @@ class analyseTable:
 
     def cleanOrigTable(self):
         """清洗列表"""
-        error_txt_path = os.path.join(self.result_folder_path, '%s_%s.txt' % ('errorTXT', self.today))
-        self.f = open(error_txt_path, 'w')  # 创建一个文本
         def extral_number(x, columns_name, table_name):
-            res_list = re.findall(r'[.\d]+', x)
+            if str(x) == 'nan':
+                return ''
+            res_list = re.findall(r'[.\d]+', str(x))
             if len(res_list) > 1 or len(res_list) == 0:
                 if len(error_list) <= 10:
-                    error_list.append([table_name, columns_name, x, '转换数字大于一个或者为空'])
+                    error_list.append([table_name, columns_name, str(x), '转换数字大于一个或者为空'])
                 res_list = []
             re_str = ''.join(res_list)
             return re_str
@@ -335,7 +379,6 @@ class analyseTable:
                 self.df_room[room_columns] = self.df_room[room_columns].map(lambda x: extral_number(x, te_columns, '房间表'))
                 if len(error_list):
                     self.save_text(error_list)
-
 
     def loadCsvData(self, csv_path, columns, table):
 
@@ -380,7 +423,7 @@ class analyseTable:
             new_columns = ['cleantime'] + list(self.data['projcolumns_dict'].values())
             self.df_proj_data['cleantime'] = self.now_time
             self.df_proj_data = self.df_proj_data[sort_columns]
-            self.df_proj_data.replace('', '-', inplace=True)
+            self.df_proj_data.fillna('-', inplace=True)
             self.df_proj_data = self.origDataReplace(self.df_proj_data)
 
             csv_path = os.path.join(self.result_folder_path, '%s_%s.csv' % (self.origTable_pro, self.today))
@@ -579,8 +622,8 @@ class analyseTable:
         第五张表
         :return:
         """
-        dataList = self.getAddDate(self.four_table, self.five_table, self.data['FourTable_spider_time_field'],
-                                   self.data['FiveTable_spider_time_field'])
+
+        dataList = self.getAddDate( self.five_table, self.four_table, self.data['FiveTable_spider_time_field'], self.data['FourTable_spider_time_field'], self.conn_1)
         if len(dataList) == 1:
             self.five_dateList = "('{}')".format(dataList[0])
         else:
@@ -596,24 +639,7 @@ class analyseTable:
         pass
 
     def countOrigTable(self):
-        # room_columns = ','.join(self.orig_proj_columns)
-        # sql_proj = """select {columns}
-        #          from {proTable}
-        #          """.format(proTable=self.origTable_pro,columns=room_columns)
-        # self.df_proj_data = pd.read_sql(sql_proj, con=self.conn_2)
         count_txt_path = os.path.join(self.result_folder_path, '%s_%s.txt' % ('countTXT', self.today))
-
-        # 列为空个数
-        if isinstance(self.df_proj_data, pd.DataFrame):
-            orig_proj_columns = self.df_proj_data.columns.tolist()
-            orig_data_len = len(self.df_proj_data)
-            for proj_column in orig_proj_columns:
-                if proj_column not in self.projOrigFieldData:
-                    self.projOrigFieldData[proj_column] = {}
-                self.projOrigFieldData[proj_column]['列值为空占比'] = \
-                                self.df_proj_data[proj_column].isnull().sum() / orig_data_len * 100
-
-
         # 项目数
         sql_proj_num = """select count(*) as projTotalnum from {table}""".format(table=self.origTable_pro)
         df_sql_proj_num = pd.read_sql(sql_proj_num, con=self.conn_2)
@@ -646,17 +672,12 @@ class analyseTable:
         df_sql_orig_room = pd.read_sql(sql_orig_room, con=self.conn_1)
 
         with open(count_txt_path, 'w') as f:
-            f.write('项目表列空占比\n')
-            for key, value in self.projOrigFieldData.items():
-                s = '%s: %.3f%%\n' % (key, value['列值为空占比'])
-                f.write(s)
-
             f.write('\n项目数\n')
             for i in df_recent_two_day[['日期', '项目数']].values.tolist():
                 s = '日期:%s,  项目数:%s\n' % (i[0], i[1])
                 f.write(s)
 
-            proj_num_before = df_recent_two_day.loc[df_recent_two_day['日期'] ==recent_two_day[0], '项目数'].values[0]
+            proj_num_before = df_recent_two_day.loc[df_recent_two_day['日期']==recent_two_day[0], '项目数'].values[0]
             proj_num_last = df_recent_two_day.loc[df_recent_two_day['日期']==recent_two_day[1], '项目数'].values[0]
             proj_diff_num = proj_num_last - proj_num_before
             if proj_diff_num >= 0:
@@ -682,18 +703,20 @@ class analyseTable:
                 s = '日期:%s,  房间状态:%s,  状态变化数量:%s\n' % (i[0], i[1], i[2])
                 f.write(s)
 
-    def anlyse(self):
-        self.creat_table()
-        self.alter_table()
-        self.readOrigTable()  # 读取
-        self.cleanOrigTable()  # 清洗数据
-        self.insertProj()
-        self.insetDataTable()
-        self.insetDataTable_one()
-        self.create_four()  # 生成第四张表
-        # self.create_five()  # 生成第五张表
-        # self.countOrigTable()  # 统计函数
 
+    def anlyse(self):
+        # self.creat_table()
+        # self.alter_table()
+        # self.readOrigTable()  # 读取
+        # self.checkOrigTable()
+        # self.cleanOrigTable()  # 清洗数据
+        # self.insertProj()
+        # self.insetDataTable()
+        # self.insetDataTable_one()
+        # self.create_four()  # 生成第四张表
+        self.create_five()  # 生成第五张表
+        self.countOrigTable()  # 统计函数
+        self.f.close()
 
 if __name__ == '__main__':
     start = time.time()

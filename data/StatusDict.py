@@ -77,11 +77,15 @@ guangzhou = {
     'dataTable_spider_time_field': 'spidertime',
     'table1_spider_time_field': 'spider_time',
     'FourTable_spider_time_field': 'spider_time',
-    'FiveTable_spider_time_field': 'spidertime',
+    'FiveTable_spider_time_field': 'spider_time',
     # 表连接字段
     'proj_merge_columns': ['pjid'],  # 生成的proj表
     'room_merge_columns': ['pjid'],  # 原始room表
     # 其他
+    # 有空列输出列
+    'proj_err_out_columns': ['pro_name', 'url'],
+    'room_err_out_columns': ['url'],
+    'sta_err_out_columns': ['pjid'],
 
     # 生成的proj表,固定列对应列名
     'province': '广东',
@@ -145,6 +149,11 @@ shenzhen = {
         '已签预售合同': 5, '已备案': 1, '期房待售': 1, '已签认购书': 1, '司法查封': 1, '区局锁定': 1, '系统自动锁定': 1,
         '未知': 1, '初始登记': 1
     },  # 城市的销售状态等级
+
+    # # 有空列输出列
+    # 'proj_err_out_columns': ['proname', 'url'],
+    # 'room_err_out_columns': ['url'],
+    # 'sta_err_out_columns': ['pjid'],
 
     # 清洗列
     'proj': {'number': ['base_area', 'ancestral_area', 'toscale', 'tonum', 'toarea', 'tonum_onsale_']},
